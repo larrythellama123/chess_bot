@@ -240,9 +240,40 @@ class GameState:
                 start_square_row, start_square_col = position
                 self.move_generate(start_square_row,start_square_col, self.total_moves,is_current_player=True)
 
-        # self.change_current_color()
 
-        
+
+    def start_new_round_min_max(self):
+        self.total_moves = {}
+        self.attack_squares = {}
+        self.pinned_piece_paths = []
+        self.checked_path = []
+        self.defended_squares = []
+        if self.current_color == Piece.white:
+            self.attack_color = Piece.black
+            self.current_color = Piece.black
+            for row in range(8):
+                for col in range(8):
+                    if self.board[row][col] !=0:
+                        if Piece.is_color(self.board[row][col],Piece.black,True): 
+                            self.current_color = Piece.black
+                            self.move_generate(row,col, self.attack_squares)
+                        else:
+                            self.current_color = Piece.white
+                            self.move_generate(row,col, self.total_moves, is_current_player=True)
+                    
+        else:
+            self.attack_color = Piece.white
+            self.current_color = Piece.white
+            for row in range(8):
+                for col in range(8):
+                    if self.board[row][col] !=0:
+                        if Piece.is_color(self.board[row][col],Piece.white,True): 
+                            self.current_color = Piece.white
+                            self.move_generate(row,col, self.total_moves, is_current_player=True)
+                        else:
+                            self.current_color = Piece.black
+                            self.move_generate(row,col, self.total_moves, is_current_player=True)
+
 
 
     def move_generate(self,start_square_row, start_square_col, square_dict, is_current_player=False):  
@@ -431,7 +462,8 @@ class GameState:
                     move.target_square = (square_row-space, square_col) 
                 else:
                     break  
-            square_dict[(square_row,square_col)].append(move)
+            if self.current_color != self.attack_color:
+                square_dict[(square_row,square_col)].append(move)
 
 
 
@@ -599,7 +631,7 @@ class GameState:
             king_row = initial_king_row
             king_col = initial_king_col
             move = Move()
-            move.start_square = (initial_king_row,initial_king_col)
+            move.start_square = (initial_king_row,initial_king_col) 
             row_movement,col_movement = direction
             king_row+=row_movement
             king_col+=col_movement
@@ -694,13 +726,15 @@ class GameState:
             #filter king moves that would put it under check
             row,col = start_square
             remove_list = []
-            if Piece.is_type(self.board[row][col], Piece.king):
+            if Piece.is_type(self.board[row][col], Piece.king) and Piece.is_color(self.board[row][col],self.current_color):
                 #should not rmeove while iterating
                 for move in square_dict[start_square]:
                     for square in attack_squares:
                        
                         if move.target_square == square.target_square:
-                            
+                            print("king moves to put it in check",move.start_square,move.target_square)
+                            s_row, s_col = square.start_square
+                            print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
                             remove_list.append(move)
                             break
                 for move in remove_list:

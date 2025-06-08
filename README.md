@@ -14,10 +14,9 @@ Black pieces pick illogical decisions
 
 issues with minmax:
 the black king positions sometimes seems to be removed from the list even though it was the best move
-black and white king seem to be able to get close or eat each other
 black sliding pieces are able to pass thru other pieces
 if the black king is in check, it seems as if the white king is in check as well
-taking too long
+
 
 issues with move gen:
 pawns dont become other pieces when they reach the end 
