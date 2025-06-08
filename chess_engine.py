@@ -1,0 +1,988 @@
+#keep track of attacked squares
+#keep track of the pinned pieces
+#keep track of the checked paths
+#store 2 attack sqaure paths
+#pinned paths is also remade on each turn
+
+
+
+#self.attack_squares is a list generate on each new turn containing the list of the legal moves from one side
+
+#to check if a piece can end a pin
+    #check if the piece is not one of the pieces involved in another pinned_path
+    #and its not the king
+
+    #so when filtering moves, check if start piece is from a pinned_path
+
+#to check whether a move can end a check
+    #check if the move breaks the path of check and its not from a pinned piece
+    # check if the king can move anywhere that is not on the attack square of the opposite side    
+
+
+#generate all moves - returns the start squares and target squares
+#generate legal moves - will filter the illegal stuff out 
+    #if there are checks or pinned pieces
+    #this will check if pinned ones move will result in a discovered check
+    #check if a move ends the check
+    #if no move can end the check, its checkmate
+
+
+#generate the attack squares of the opp side every round
+
+from piece import pieces
+from move import Move
+from square import squares
+import copy
+Square = squares()
+Piece = pieces()
+class GameState:
+
+    def __init__(self):
+        self.fen_string =  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
+        self.board = [[0 for j in range(8)] for i in range(8)]
+        #experimental
+        self.final_allowed_moves = [] 
+        self.total_moves = {}
+        self.attack_squares = {}
+        self.temp_attack_squares = {}
+        self.castle_moves = [] 
+        #will take in the sqaures involved in the pinning
+        self.pinned_piece_paths=[]
+        self.checked_path = []
+        
+
+        self.black_positions = [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7),(1,0),(1,1),(1,2),(1,3),(1,4),(1,5),(1,6),(1,7)]
+        self.white_positions = [(6,0),(6,1),(6,2),(6,3),(6,4),(6,5),(6,6),(6,7),(7,0),(7,1),(7,2),(7,3),(7,4),(7,5),(7,6),(7,7)]
+
+        self.translate_fen_strings()
+        # self.distance_to_edge = {'n':0,'s':0,'e':0,'w':0, 'ne':0, 'nw':0, 'se':0, 'sw':0}
+        self.distance_to_edge_white = {}
+        self.distance_to_edge_black = {}
+
+        self.knight_offsets = {'te':(2,1),'tw':(2,-1),'be':(-2,1),'bw':(-2,-1),'htw':(1,2),'hte':(1,-2),'hbe':(-1,2),'hbw':(-1,-2)}
+        self.knight_positions = {'LWK':(7,1),'RWK':(7,6),'LBK':(0,1),'RBK':(0,6)}
+        self.knight_moves_dict = {}
+
+        self.defended_squares = []
+
+
+        self.current_color = Piece.white
+        self.attack_color = Piece.black
+        self.human_player = Piece.white
+        self.AI_player = Piece.black
+
+        self.WrookRMove = False
+        self.WrookLMove = False
+        self.BrookLMove = False
+        self.BrookRMove =False
+        self.WkingMove = False
+        self.BkingMove = False
+
+        self.points = 0
+        self.best_move = None
+        self.visited = []
+        self.initial_depth = 0
+        #n,s,e,w,ne,nw,se,sw
+        #    N
+        # W     E
+        #    S
+        self.direction_offset = [(1,0),(-1,0),(0,1),(0,-1),(1,1),(1,-1),(-1,1),(-1,-1)]
+
+        #####for minmax#####
+        self.Pawn = 1
+        self.Knight = 3
+        self.Bishop = 3
+        self.Rook = 5
+        self.Queen = 9
+        self.points = 0
+
+
+    def translate_fen_strings(self):
+        col = 0
+        row = 0 
+        for i in range(len(self.fen_string)):
+            if self.fen_string[i] == '8':
+                for column in range(8):
+                    self.board[row][column] = 0
+                continue
+            if self.fen_string[i] == '/':
+                row += 1
+                col = 0
+                continue 
+            if self.fen_string[i].lower() == 'r':
+                piece_type = Piece.rook
+            if self.fen_string[i].lower() == 'n':
+                piece_type = Piece.knight
+            if self.fen_string[i].lower() == 'b':
+                piece_type = Piece.bishop
+            if self.fen_string[i].lower() == 'q':
+                piece_type = Piece.queen
+            if self.fen_string[i].lower() == 'k':
+                piece_type = Piece.king
+            if self.fen_string[i].lower() == 'p':
+                piece_type = Piece.pawn
+
+            if self.fen_string[i].isupper():
+                piece_color = Piece.white
+            else:
+                piece_color = Piece.black
+            self.board[row][col] = piece_color|piece_type
+            col += 1
+
+        return self.board
+
+    #find the num of squares to the edge of the board in every directionm then during move generatioin, just 
+    #input the start quare in and the distances to the edgss can all be found 
+    
+    #gets the distance to the edges of the board
+    def get_distance_to_edge_for_black(self,start_square_row, start_square_col):
+        self.distance_to_edge_black[(start_square_row,start_square_col)] = {'n':0,'s':0,'e':0,'w':0, 'ne':0, 'nw':0, 'se':0, 'sw':0}
+        self.distance_to_edge_black[(start_square_row,start_square_col)]['n'] = self.distance_to_edge_white[(start_square_row,start_square_col)]['s']
+        self.distance_to_edge_black[(start_square_row,start_square_col)]['s'] = self.distance_to_edge_white[(start_square_row,start_square_col)]['n']
+        self.distance_to_edge_black[(start_square_row,start_square_col)]['w'] = self.distance_to_edge_white[(start_square_row,start_square_col)]['e']
+        self.distance_to_edge_black[(start_square_row,start_square_col)]['e'] = self.distance_to_edge_white[(start_square_row,start_square_col)]['w']
+        self.distance_to_edge_black[(start_square_row,start_square_col)]['sw'] = self.distance_to_edge_white[(start_square_row,start_square_col)]['ne']
+        self.distance_to_edge_black[(start_square_row,start_square_col)]['se'] = self.distance_to_edge_white[(start_square_row,start_square_col)]['nw']
+        self.distance_to_edge_black[(start_square_row,start_square_col)]['nw'] = self.distance_to_edge_white[(start_square_row,start_square_col)]['se']
+        self.distance_to_edge_black[(start_square_row,start_square_col)]['ne'] = self.distance_to_edge_white[(start_square_row,start_square_col)]['sw']
+
+    def get_distance_to_edge_for_white(self, start_square_row,start_square_col):
+            self.distance_to_edge_white[(start_square_row,start_square_col)] = {'n':0,'s':0,'e':0,'w':0, 'ne':0, 'nw':0, 'se':0, 'sw':0}
+
+            for direction_index in list(self.distance_to_edge_white[(start_square_row,start_square_col)].keys()):
+                square_row = start_square_row
+                square_col = start_square_col
+                count = 0
+                if direction_index == 'n':
+                    while square_row>0:
+                        square_row -= 1
+                        count += 1
+                    self.distance_to_edge_white[(start_square_row,start_square_col)]['n'] = count
+
+                if direction_index == 's':
+                    while square_row<7:
+                        square_row += 1
+                        count += 1
+                    self.distance_to_edge_white[(start_square_row,start_square_col)]['s'] = count
+
+                if direction_index == 'e':
+                    while square_col<7:
+                        square_col += 1
+                        count += 1
+                    self.distance_to_edge_white[(start_square_row,start_square_col)]['e'] = count 
+
+                if direction_index == 'w':
+                    while square_col>0:
+                        square_col -= 1
+                        count += 1
+                    self.distance_to_edge_white[(start_square_row,start_square_col)]['w'] = count 
+
+                if direction_index == 'ne':
+                    self.distance_to_edge_white[(start_square_row,start_square_col)]['ne'] = min(self.distance_to_edge_white[(start_square_row,start_square_col)]['n'],self.distance_to_edge_white[(start_square_row,start_square_col)]['e'])
+
+                if direction_index == 'nw':
+                    self.distance_to_edge_white[(start_square_row,start_square_col)]['nw'] = min(self.distance_to_edge_white[(start_square_row,start_square_col)]['n'],self.distance_to_edge_white[(start_square_row,start_square_col)]['w'])
+
+                if direction_index == 'se':
+                    self.distance_to_edge_white[(start_square_row,start_square_col)]['se'] = min(self.distance_to_edge_white[(start_square_row,start_square_col)]['s'],self.distance_to_edge_white[(start_square_row,start_square_col)]['e'])
+
+                if direction_index == 'sw':
+                    self.distance_to_edge_white[(start_square_row,start_square_col)]['sw'] = min(self.distance_to_edge_white[(start_square_row,start_square_col)]['s'],self.distance_to_edge_white[(start_square_row,start_square_col)]['w'])
+
+    def change_current_color(self):
+        if self.current_color == Piece.black:
+            self.current_color = Piece.white
+        else:
+            self.current_color = Piece.black
+
+
+
+    def initial_setup(self):
+        for row in range(8):
+            for col in range(8):
+                self.get_distance_to_edge_for_white(row,col)
+                self.get_distance_to_edge_for_black(row,col)
+
+
+
+    #start of each round, clear the old keys, then iterate through the squares list to regenerate attack squares of the opp
+    #then do move generation for current player
+    def start_new_round(self):
+        self.total_moves = {}
+        self.attack_squares = {}
+        self.pinned_piece_paths = []
+        self.checked_path = []
+        self.defended_squares = []
+        if self.current_color == Piece.white:
+            self.attack_color = Piece.black
+            self.current_color = Piece.black
+            for position in self.black_positions:
+                start_square_row, start_square_col = position
+                self.move_generate(start_square_row,start_square_col, self.attack_squares)
+
+            self.current_color = Piece.white
+            for position in self.white_positions:
+                # print("positions:",position)
+                start_square_row, start_square_col = position
+                self.move_generate(start_square_row,start_square_col, self.total_moves, is_current_player=True)
+
+            # if(self.no_moves):
+            #     # print("COOKED")
+        else:
+            self.attack_color = Piece.white
+            self.current_color = Piece.white
+            for position in self.white_positions:
+                start_square_row, start_square_col = position
+                self.move_generate(start_square_row,start_square_col, self.attack_squares)
+
+            self.current_color = Piece.black
+            for position in self.black_positions:
+                start_square_row, start_square_col = position
+                self.move_generate(start_square_row,start_square_col, self.total_moves,is_current_player=True)
+
+        # self.change_current_color()
+
+        
+
+
+    def move_generate(self,start_square_row, start_square_col, square_dict, is_current_player=False):  
+
+        color = Piece.get_piece_color(self.board[start_square_row][start_square_col])  
+        if Piece.is_type(self.board[start_square_row][start_square_col],Piece.bishop):
+            #generate attack sqaures for the config of opp pieces first            
+
+            self.generate_sliding_moves(start_square_row, start_square_col,Piece.bishop,color, square_dict)
+        
+        if Piece.is_type(self.board[start_square_row][start_square_col],Piece.rook):
+            self.generate_sliding_moves(start_square_row, start_square_col,Piece.rook,color, square_dict)
+
+        if Piece.is_type(self.board[start_square_row][start_square_col],Piece.queen):
+            self.generate_sliding_moves(start_square_row, start_square_col,Piece.queen,color,  square_dict)
+
+        if Piece.is_type(self.board[start_square_row][start_square_col],Piece.king):
+            self.generate_king_moves(start_square_row, start_square_col,  square_dict)
+
+        if Piece.is_type(self.board[start_square_row][start_square_col],Piece.pawn):
+            self.generate_pawn_moves(start_square_row, start_square_col, square_dict)
+
+        if Piece.is_type(self.board[start_square_row][start_square_col],Piece.knight):
+            self.generate_knight_moves(start_square_row,start_square_col,self.knight_moves_dict)
+            self.add_knight_squares(square_dict, start_square_row, start_square_col)
+
+
+        if is_current_player:
+            self.build_castle_moves()
+
+
+
+
+
+
+    def generate_sliding_moves(self,start_square_row, start_square_col,piece_type,piece_color,square_dict):
+        distance_to_edge = {}
+        if piece_color == Piece.black:
+            distance_to_edge  = self.distance_to_edge_black
+        else:
+            distance_to_edge = self.distance_to_edge_white
+
+        limit = list(distance_to_edge[(start_square_row,start_square_col)].keys())
+        if piece_type == Piece.rook:
+            limit = limit[:4]
+        if piece_type == Piece.bishop:
+            limit = limit[4:8]
+
+
+        # break_flag  = False
+        square_dict[(start_square_row,start_square_col)] = []
+        for distance_index in limit:
+            # if break_flag == True:
+            #     break_flag = False
+            #     continue
+            moves = []
+            pinned_piece = False
+            # print(f"distance index: {distance_index}")
+            # print(f"length:{distance_to_edge[(start_square_row,start_square_col)][distance_index]}")
+            # print(f"start_sq_row:{start_square_row}, start_sq_col:{start_square_col}")
+            square_row = start_square_row
+            square_col = start_square_col
+            is_extended_already = False
+
+            for i in range(distance_to_edge[(start_square_row,start_square_col)][distance_index]):
+               
+                #iterate respective direction
+                if piece_color == Piece.black:
+                    if distance_index == 'n':
+                        square_row += 1
+
+                    if distance_index == 's':
+                        square_row -= 1
+
+                    if distance_index == 'e':
+                        square_col -= 1
+
+                    if distance_index == 'w':
+                        square_col += 1
+
+                    if distance_index == 'ne':
+                        square_row += 1
+                        square_col -= 1
+
+                    if distance_index == 'se':
+                        square_row -= 1
+                        square_col -= 1
+
+                    if distance_index == 'nw':
+                        square_row += 1
+                        square_col += 1
+
+                    if distance_index == 'sw':
+                        square_row -= 1
+                        square_col += 1
+                else:
+
+                    if distance_index == 'n':
+                        square_row -= 1
+
+                    if distance_index == 's':
+                        square_row += 1
+
+                    if distance_index == 'e':
+                        square_col += 1
+
+                    if distance_index == 'w':
+                        square_col -= 1
+
+                    if distance_index == 'ne':
+                        square_row-= 1
+                        square_col += 1
+
+                    if distance_index == 'se':
+                        square_row += 1
+                        square_col += 1
+
+                    if distance_index == 'nw':
+                        square_row -= 1
+                        square_col -= 1
+
+                    if distance_index == 'sw':
+                        square_row += 1
+                        square_col -= 1
+
+                if square_col > 7 or square_row < 0 or  square_row >7 or square_col < 0:
+                    square_dict[(start_square_row,start_square_col)].extend(moves)
+                    is_extended_already = True
+                    # for move in square_dict[(start_square_row,start_square_col)]:
+                    #     print("move start",move.start_square)
+                    #     print("move target", move.target_square)
+                    print(1)
+                    # break_flag = True    
+                    break
+
+                if (square_row,square_col) != (start_square_row,start_square_col):
+                    if Piece.is_color(self.board[square_row][square_col],piece_color,True):
+                        #only add if pinned piece path is not already added(see below)
+                        if not pinned_piece:
+                            square_dict[(start_square_row,start_square_col)].extend(moves)
+                            is_extended_already = True
+                            self.defended_squares.append((square_row,square_col))
+                        break
+
+                move = Move()
+                move.start_square = (start_square_row, start_square_col)
+                move.target_square = (square_row, square_col)
+                moves.append(move)
+
+                if (square_row,square_col) != (start_square_row,start_square_col):
+                    if Piece.is_color(self.board[square_row][square_col],piece_color,False):
+                        if Piece.is_type(self.board[square_row][square_col],Piece.king):
+                            if pinned_piece:
+                                #if true there is another of piece of opoosing color blocking the opposing king
+                                #add the full path (to the king) to the pinned paths 
+                                # self.pinned_piece_paths.extend(square_dict[(start_square_row,start_square_col)])
+                                self.pinned_piece_paths.extend(moves)
+                            else:
+                                self.checked_path.extend(moves)
+                        else:
+                            #there is an opposing color in this direction
+                            if is_extended_already:
+                                break
+                            pinned_piece = True
+                            #save the attack squares here
+                            #do not break, continue checking to see if it is pinned
+                            square_dict[(start_square_row,start_square_col)].extend(moves)
+                            is_extended_already = True
+                            
+
+            if not is_extended_already:
+                square_dict[(start_square_row,start_square_col)].extend(moves)
+
+
+    def move_pawn_two_spaces(self,square_row,square_col,square_dict, move_spaces):
+        for space in range(1,abs(move_spaces)+1):
+            move = Move()
+            move.start_square = (square_row, square_col)
+            if move_spaces > 0:
+                if self.board[square_row+space][square_col] == 0:
+                    move.target_square = (square_row+space, square_col)
+                else: 
+                    break
+            else:
+                if self.board[square_row-space][square_col] == 0:
+                    move.target_square = (square_row-space, square_col) 
+                else:
+                    break  
+            square_dict[(square_row,square_col)].append(move)
+
+
+
+    def generate_pawn_moves(self,square_row, square_col, square_dict):
+        #check if the pawn has been moved before to see if it can move spaces
+        start_square_row  = square_row
+        start_square_col  = square_col
+        square_dict[(start_square_row,start_square_col)] = []
+        
+        if self.current_color == Piece.white:
+            if (square_row,square_col) in Square.white_pawn_original_location:
+                self.move_pawn_two_spaces(square_row,square_col,square_dict,-2)
+            else:
+                move = Move()
+                move.start_square = (square_row, square_col)
+                square_row -= 1 
+                if self.board[square_row][square_col]==0:
+                    move.target_square = (square_row, square_col)
+                    if self.current_color != self.attack_color:
+                        square_dict[(start_square_row,start_square_col)].append(move)
+                square_row += 1
+
+
+            #check if there is an opp piece to the NE
+            move = Move()
+            move.start_square = (square_row, square_col)
+            square_row -= 1
+            square_col += 1
+            if (square_row<8 and square_row > -1 and square_col<8 and square_col >-1):
+                if self.current_color == self.attack_color or Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],False):
+                    move.target_square = (square_row, square_col)
+                    square_dict[(start_square_row,start_square_col)].append(move)
+                    if Piece.is_type(self.board[square_row][square_col],Piece.king):
+                        print("YEP COOKED")
+                        self.checked_path.append(move)
+                elif Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],True):
+                    self.defended_squares.append((square_row,square_col))
+
+
+            square_row += 1
+            square_col -= 1
+
+            #check if there is an opp piece to the NW
+            move = Move()
+            move.start_square = (square_row, square_col)
+            square_row -= 1
+            square_col -= 1
+            if (square_row<8 and square_row > -1 and square_col<8 and square_col >-1):
+                if self.current_color == self.attack_color or Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],False):
+                    move.target_square = (square_row, square_col)
+                    square_dict[(start_square_row,start_square_col)].append(move)
+                    if Piece.is_type(self.board[square_row][square_col],Piece.king):
+                        self.checked_path.append(move)
+                        
+                elif Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],True):
+                    self.defended_squares.append((square_row,square_col))
+
+        else:
+            if (square_row,square_col) in Square.black_pawn_original_location:
+                self.move_pawn_two_spaces(square_row,square_col,square_dict,2)
+            else:
+                move = Move()
+                move.start_square = (square_row, square_col)
+                square_row += 1 
+                if self.board[square_row][square_col]==0:
+                    move.target_square = (square_row, square_col)
+                    square_dict[(start_square_row,start_square_col)].append(move)
+                square_row -= 1
+
+            #check if there is an opp piece to the NE
+            move = Move()
+            move.start_square = (square_row, square_col)
+            square_row += 1
+            square_col += 1
+            if (square_row<8 and square_row > -1 and square_col<8 and square_col >-1):
+                if self.current_color == self.attack_color:
+                    move.target_square = (square_row, square_col)
+                    square_dict[(start_square_row,start_square_col)].append(move)
+                elif Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],False):
+                    move.target_square = (square_row, square_col)
+                    square_dict[(start_square_row,start_square_col)].append(move)
+                    if Piece.is_type(self.board[square_row][square_col],Piece.king):
+                        self.checked_path.append(move)
+                elif Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],True):
+                    self.defended_squares.append((square_row,square_col))
+            square_row -= 1
+            square_col -= 1
+
+            #check if there is an opp piece to the NW
+            move = Move()
+            move.start_square = (square_row, square_col)
+            square_row += 1
+            square_col -= 1
+            if (square_row<8 and square_row > -1 and square_col<8 and square_col >-1):
+                if self.current_color == self.attack_color:
+                    move.target_square = (square_row, square_col)
+                    square_dict[(start_square_row,start_square_col)].append(move)
+                elif Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],False):
+                    move.target_square = (square_row, square_col)
+                    square_dict[(start_square_row,start_square_col)].append(move)
+                    if Piece.is_type(self.board[square_row][square_col],Piece.king):
+                        self.checked_path.append(move)
+                elif Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],True):
+                    self.defended_squares.append((square_row,square_col))
+            
+        
+                
+        #check if it can move one piece forward
+        
+
+    def add_knight_squares(self,square_dict, square_row, square_col):
+        start_square = (square_row,square_col)
+
+        square_dict[(square_row,square_col)] = []
+        if start_square in self.knight_moves_dict:
+            for target_square in self.knight_moves_dict[start_square]:
+                move = Move()
+                move.start_square = start_square
+                row, col = target_square
+                if Piece.is_color(self.board[row][col],self.board[square_row][square_col],False) or self.board[row][col] == 0 : 
+                    move.target_square = target_square
+                    square_dict[(square_row,square_col)].append(move)
+                    if Piece.is_type(self.board[row][col],Piece.king):
+                        self.checked_path.append(move)
+                elif Piece.is_color(self.board[square_row][square_col],self.board[square_row][square_col],True):
+                    self.defended_squares.append((row,col))
+
+        
+
+    #generate this at the start since these are fixed 
+    def generate_knight_moves(self,knight_row, knight_col,knight_moves_dict):
+        initial_knight_row = knight_row
+        initial_knight_col = knight_col
+        if (initial_knight_row) not in knight_moves_dict:
+            knight_moves_dict[(initial_knight_row,initial_knight_col)] = []
+            for offset in self.knight_offsets:
+                knight_row = initial_knight_row
+                knight_col = initial_knight_col
+
+                row_movement , col_movement = self.knight_offsets[offset]
+                knight_row += row_movement
+                knight_col += col_movement
+                if knight_row > 7 or knight_row <0 or knight_col > 7 or knight_col < 0:
+                    continue
+
+                if(knight_row,knight_col) in knight_moves_dict[(initial_knight_row,initial_knight_col)]:
+                    continue
+                # add the new position
+                knight_moves_dict[(initial_knight_row,initial_knight_col)].append((knight_row,knight_col))
+                
+                if(knight_row,knight_col) in knight_moves_dict:
+                    #if position has already been explored then do not recurse
+                    continue
+                self.generate_knight_moves(knight_row,knight_col,knight_moves_dict)
+
+    
+    def generate_king_moves(self,king_row,king_col, square_dict):
+        
+        initial_king_row = king_row
+        initial_king_col = king_col
+        if (initial_king_row,initial_king_col) not in square_dict.keys():
+            square_dict[(initial_king_row,initial_king_col)] = []
+        
+        for direction in self.direction_offset:
+            king_row = initial_king_row
+            king_col = initial_king_col
+            move = Move()
+            move.start_square = (initial_king_row,initial_king_col)
+            row_movement,col_movement = direction
+            king_row+=row_movement
+            king_col+=col_movement
+            move.target_square  = (king_row,king_col)
+            if king_row > 7 or king_row <0 or king_col > 7 or king_col < 0:
+                continue
+            if Piece.is_color(self.board[king_row][king_col], self.board[initial_king_row][initial_king_col], True):
+                self.defended_squares.append((king_row,king_col))
+                continue
+            square_dict[(initial_king_row,initial_king_col)].append(move)
+
+    
+    def create_list_attack_squares(self):
+        attack_squares = []
+        for val in self.temp_attack_squares.values():
+            attack_squares.extend(val)
+        attack_squares = set(attack_squares)
+        return attack_squares
+    
+    def create_list_of_total_moves(self):
+        total_moves = []
+        for val in self.total_moves.values():
+            total_moves.extend(val)
+        total_moves= set(total_moves)
+        return total_moves
+
+
+
+    def filter_illegal_moves(self):
+        self.final_allowed_moves = []
+        #if under check, get all the legal moves to be made
+        #if one of those moves intercepts the path of check 
+        attack_squares = self.create_list_attack_squares()
+        if self.current_color == Piece.white:
+            self.black_positions.clear()
+            #filter list of new attack squares agaist the old ones
+            self.filter(self.attack_squares, self.black_positions, attack_squares)
+            self.temp_attack_squares = self.attack_squares
+            #redo the list of attack squares for the current player to use 
+            attack_squares = self.create_list_attack_squares()
+            self.white_positions.clear()
+            self.filter(self.total_moves, self.white_positions, attack_squares, is_current_player=True)
+            self.under_check()
+                                
+        else:
+            self.white_positions.clear()
+            self.filter(self.attack_squares, self.white_positions, attack_squares)
+            self.temp_attack_squares = self.attack_squares
+            #redo the list of attack squares for the current player to use 
+            attack_squares = self.create_list_attack_squares()
+            self.black_positions.clear()
+            self.filter(self.total_moves, self.black_positions, attack_squares, is_current_player=True)
+            self.under_check()
+            
+
+    def remove_castle_moves(self, move,total_moves):
+        if move.start_square == (0,4) and move.target_square == (0,6):
+            if move in self.final_allowed_moves:
+                self.final_allowed_moves.remove(move)
+        if move.start_square == (0,4) and move.target_square == (0,2):
+            if move in self.final_allowed_moves:
+                self.final_allowed_moves.remove(move)
+        if move.start_square == (7,4) and move.target_square == (7,2):
+            if move in self.final_allowed_moves:
+                self.final_allowed_moves.remove(move)
+        if move.start_square == (7,4) and move.target_square == (7,6):
+            if move in self.final_allowed_moves:
+                self.final_allowed_moves.remove(move)
+
+    def under_check(self):
+        total_moves = self.create_list_of_total_moves()
+        #pick from the list of final allowed moves
+        # temp_final_allowed_moves = []
+  
+        if self.checked_path:       
+            for checked_move in self.checked_path:
+                for move in total_moves:
+                    self.remove_castle_moves(move,total_moves)
+                    if move.target_square == checked_move.target_square or move.target_square == checked_move.start_square:
+                        self.final_allowed_moves.append(move)
+
+        else:
+            self.final_allowed_moves.extend(total_moves)
+
+
+        
+    def filter(self, square_dict, positions, attack_squares, is_current_player=False):
+
+        remove_start_squares = []
+        for start_square in square_dict:
+            positions.append(start_square)
+            #filter king moves that would put it under check
+            row,col = start_square
+            remove_list = []
+            if Piece.is_type(self.board[row][col], Piece.king):
+                #should not rmeove while iterating
+                for move in square_dict[start_square]:
+                    for square in attack_squares:
+                       
+                        if move.target_square == square.target_square:
+                            
+                            remove_list.append(move)
+                            break
+                for move in remove_list:
+                    square_dict[start_square].remove(move)
+
+                if is_current_player:
+                    self.final_allowed_moves.extend(square_dict[start_square])
+
+            
+
+            #implement 2 methods, check if the piece can end the life of the opp piece pinning it 
+            #but first check if more than one piece has it pinned 
+            pinners = 0
+            pinner_square = (0,0)
+            for pinned_piece in self.pinned_piece_paths:
+                if start_square == pinned_piece.target_square:
+                    pinner_square = pinned_piece.start_square
+                    pinners+=1 #
+
+            if pinners == 1:
+                remove = True
+                for move in square_dict[start_square]:
+                    if move.target_square == pinner_square:
+                        remove = False
+                        break
+                if remove:
+                    remove_start_squares.append(start_square)
+
+                
+            if pinners == 2:
+                remove_start_squares.append(start_square)
+
+        for start_square in remove_start_squares:
+            del square_dict[start_square]
+
+            
+
+    def check_if_rook_moved(self,square_row,square_col):
+
+        if (square_row,square_col) == (7,7):
+            self.WrookRMove = True
+
+        if (square_row,square_col) == (7,0):
+            self.WrookLMove = True
+
+        if (square_row,square_col) == (0,0):
+            self.BrookLMove = True
+
+        if (square_row,square_col) == (0,7):
+            self.BrookRMove = True
+
+        if (square_row,square_col) == (7,4):
+            self.WkingMove = True
+
+        if (square_row,square_col) == (0,4):
+            self.BkingMove = True
+
+    def build_castle_moves(self):
+        if self.current_color == Piece.black:
+            if self.board[0][5]==0 and self.board[0][6] == 0:
+                if not self.BrookRMove and not self.BkingMove:
+                    self.king_side_white_castling = True
+                    king_move = Move()
+                    king_move.start_square = (0,4)
+                    king_move.target_square = (0,6)
+                    if king_move.start_square not in self.total_moves.keys():
+                        self.total_moves[king_move.start_square] = []
+                    self.total_moves[king_move.start_square].append(king_move)
+                
+            if self.board[0][1] == 0 and self.board[0][2]==0 and self.board[0][3]==0:
+                if not self.BrookLMove and not self.BkingMove:
+                    self.queen_side_white_castling = True
+                    king_move = Move()
+                    king_move.start_square = (0,4)
+                    king_move.target_square = (0,2)
+                    if king_move.start_square not in self.total_moves.keys():
+                        self.total_moves[king_move.start_square] = []
+                    self.total_moves[king_move.start_square].append(king_move)
+        else:
+            if self.board[7][5]==0 and self.board[7][6] == 0:
+                if not self.WrookRMove and not self.WkingMove:
+                    self.king_side_black_castling = True
+                    king_move = Move()
+                    king_move.start_square = (7,4)
+                    king_move.target_square = (7,6)
+                    if king_move.start_square not in self.total_moves.keys():
+                        self.total_moves[king_move.start_square] = []
+                    self.total_moves[king_move.start_square].append(king_move)
+
+                
+            if self.board[7][1] == 0 and self.board[7][2]==0 and self.board[7][3]==0:
+                if not self.WrookLMove and not self.WkingMove:
+                    self.queen_side_black_castling = True
+                    king_move = Move()
+                    king_move.start_square = (7,4)
+                    king_move.target_square = (7,2)
+                    if king_move.start_square not in self.total_moves.keys():
+                        self.total_moves[king_move.start_square] = []
+                    self.total_moves[king_move.start_square].append(king_move)
+
+
+
+    def no_moves(self):
+        if(self.final_allowed_moves == []):
+            return True
+        return False
+
+
+########################MINMAX SECTION################################################
+
+    #use pluses for in favour of white, as the AI is supposed to be black
+    #use minuses for in favour of black
+    def check_indiv_pawns(self,row,col):
+        if (row,col) in self.attack_squares:
+            self.points += 2
+            #worse for isolated pawns
+            if (row,col) not in self.defended_squares:
+                self.points += 4 
+
+
+        
+    def minmax(self, depth, is_maximising,alpha, beta):
+        # print(self.current_color,"current",depth)
+        self.start_new_round()
+        self.filter_illegal_moves()
+        # print(self.current_color,"currenty",depth)
+
+        if depth == 0 or self.no_moves():
+            if self.no_moves() and self.human_player == self.current_color:
+                #return the largest -ve amount to acheive this outcome
+                return -30
+            elif self.no_moves() and self.AI_player == self.current_color:
+                return 30
+            return self.evaluate()
+
+        final_allowed_moves = copy.copy(self.final_allowed_moves)
+        if is_maximising:
+            best_score = float("-inf")
+            for move in final_allowed_moves:
+                if move in self.visited:
+                    continue
+                self.visited.append(move)
+                was_removed = False
+                target_row, target_col = move.target_square
+                start_row, start_col = move.start_square
+                piece = self.board[start_row][start_col]
+                target_piece = self.board[target_row][target_col]
+                self.board[start_row][start_col] = 0
+                self.board[target_row][target_col] =piece
+                if self.current_color == Piece.black:
+                    self.black_positions.remove((start_row,start_col))
+                    self.black_positions.append((target_row,target_col))
+                    if (target_row,target_col) in self.white_positions:
+                        self.white_positions.remove((target_row,target_col)) 
+                        was_removed = True
+                else:
+                    self.white_positions.remove((start_row,start_col))
+                    self.white_positions.append((target_row,target_col))
+                    if (target_row,target_col) in self.black_positions:
+                        self.black_positions.remove((target_row,target_col))
+                        was_removed = True
+                self.change_current_color()
+
+                score = self.minmax(depth-1, False,alpha,beta)
+
+                self.change_current_color()
+                if self.current_color == Piece.black:
+                    self.black_positions.remove((target_row,target_col))
+                    self.black_positions.append((start_row,start_col))
+                    if was_removed:
+                        self.white_positions.append((target_row,target_col))          
+                else:
+                    self.white_positions.remove((target_row,target_col))
+                    self.white_positions.append((start_row,start_col))
+                    if was_removed:
+                        self.black_positions.append((target_row,target_col))
+                self.board[start_row][start_col] = piece
+                self.board[target_row][target_col] = target_piece
+                if score>best_score:
+                    if depth==self.initial_depth:
+                        self.best_move = move
+                    best_score = score
+                alpha = max(alpha, best_score)
+                if beta <= alpha:
+                    break 
+
+        else:
+
+            best_score = float("inf")
+            for move in final_allowed_moves:
+                if move in self.visited:
+                    continue
+                self.visited.append(move)
+                was_removed = False
+                target_row, target_col = move.target_square
+                start_row, start_col = move.start_square
+                piece  = self.board[start_row][start_col]
+                target_piece = self.board[target_row][target_col]
+                self.board[start_row][start_col] = 0
+                self.board[target_row][target_col] = piece
+                #reverse these changes to the positions
+                if self.current_color == Piece.black:
+                    self.black_positions.remove((start_row,start_col))
+                    self.black_positions.append((target_row,target_col))
+                    if (target_row,target_col) in self.white_positions:
+                        self.white_positions.remove((target_row,target_col))
+                        was_removed = True 
+                else:                   
+                    self.white_positions.remove((start_row,start_col))
+                    self.white_positions.append((target_row,target_col))
+                    if (target_row,target_col) in self.black_positions:
+                        self.black_positions.remove((target_row,target_col))
+                        was_removed = True
+
+                self.change_current_color()
+                score = self.minmax(depth-1,True,alpha,beta)
+
+                self.change_current_color() 
+
+                if self.current_color == Piece.black:
+                    self.black_positions.remove((target_row,target_col))
+                    self.black_positions.append((start_row,start_col))
+                    if was_removed:
+                        self.white_positions.append((target_row,target_col)) 
+                    
+                else:
+                    self.white_positions.remove((target_row,target_col))
+                    self.white_positions.append((start_row,start_col))
+                    if was_removed:
+                        self.black_positions.append((target_row,target_col))
+                self.board[start_row][start_col] = piece
+                self.board[target_row][target_col] = target_piece
+                if score<best_score:
+                    if depth==self.initial_depth:
+                        self.best_move = move
+                    best_score = score
+                beta = min(beta, best_score)
+                if beta <= alpha:
+                    break 
+
+        return best_score
+
+
+    def evaluate(self):
+        #check the total value of pieces
+
+        points = 0
+        for white in self.white_positions:
+            row,col = white
+            if Piece.is_type(self.board[row][col], Piece.pawn):
+                points += self.Pawn
+            if Piece.is_type(self.board[row][col], Piece.knight):
+                points += self.Knight
+            if Piece.is_type(self.board[row][col], Piece.bishop):
+                points += self.Bishop
+
+            if Piece.is_type(self.board[row][col], Piece.queen):
+                points += self.Queen
+
+            if Piece.is_type(self.board[row][col], Piece.rook):
+                points += self.Rook
+
+        for black in self.black_positions:
+            row,col = black
+            if Piece.is_type(self.board[row][col], Piece.pawn):
+                points -= self.Pawn
+            if Piece.is_type(self.board[row][col], Piece.knight):
+                points -= self.Knight
+            if Piece.is_type(self.board[row][col], Piece.bishop):
+                points -= self.Bishop
+
+            if Piece.is_type(self.board[row][col], Piece.queen):
+                points -= self.Queen
+
+            if Piece.is_type(self.board[row][col], Piece.rook):
+                points -= self.Rook
+
+        return points
+
+    
+
+        
+        
+        
+        
