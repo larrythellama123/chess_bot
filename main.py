@@ -355,6 +355,11 @@ while run:
                                 rook_piece = board[0][7]
                                 board[0][5] = rook_piece
                                 board[0][7] = 0
+                    #change pawn to queen or knight            
+                    if row==7 or row==0:
+                        if Piece.is_type(board[new_row][new_column],Piece.pawn):
+                            board[new_row][new_column] = Piece.queen
+                            
 
                 else:
                     board[initial_row][initial_col] = Dragged_Piece

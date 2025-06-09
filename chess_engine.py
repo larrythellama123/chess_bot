@@ -658,8 +658,13 @@ class GameState:
         total_moves= set(total_moves)
         return total_moves
 
+    def change_pawn_AI(self,row,col):
+        if row==7 or row==0:
+            if Piece.is_type(self.board[row][col],Piece.pawn):
+                if self.current_color == self.AI_player:
+                    self.board[row][col] = Piece.queen
 
-
+        
     def filter_illegal_moves(self):
         self.final_allowed_moves = []
         #if under check, get all the legal moves to be made
