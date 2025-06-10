@@ -18,6 +18,7 @@ p.display.set_caption(('Chess'))
 run  = True
 FPS =60
 IMAGES={}
+ENLARGED_IMAGES = {}
 
 WHITE = (255, 255, 255)
 BLACK = (100,100,100)
@@ -37,6 +38,12 @@ def load_images():
     pieces = ['wp', 'wR', 'wN', 'wB', 'wK', 'wQ', 'bp', 'bR', 'bN', 'bB', 'bK', 'bQ']
     for piece in pieces:
         IMAGES[piece] = p.transform.scale(p.image.load('images/'+ piece +'.png'), (SQUARE_SIZE, SQUARE_SIZE))
+
+def load_enlarged_images():
+    pieces = ['wK','wQ']
+    for piece in pieces:
+        ENLARGED_IMAGES[piece] = p.transform.scale(p.image.load('images/'+ piece +'.png'), (2*SQUARE_SIZE, 2*SQUARE_SIZE))
+
 
 
 def draw_board(win):
@@ -228,16 +235,33 @@ def AI_move(black_positions,white_positions):
     gameState.white_positions = white_positions
             
 
+def decide_queen_or_knight(selected_row, selected_col):
+    if pawn_change:
+        if queen_rect.collidepoint(event.pos):  
+            board[selected_row][selected_col] = Piece.queen
+        elif knight_rect.collidepoint(event.pos):
+            board[selected_row][selected_col] = Piece.knight
+
+# white_queen_rect = ENLARGED_IMAGES['wQ'].get_rect()
+
+# white_knight_rect = ENLARGED_IMAGES['wK'].get_rect()
+
+# black_queen_rect = ENLARGED_IMAGES['bQ'].get_rect()
+# black_knight_rect = ENLARGED_IMAGES['bK'].get_rect()
 
 clock = p.time.Clock()
 is_highlight = False
 column = 0
 row = 0
 load_images()
+load_enlarged_images()
 Dragged_Piece = None
 initial_row, initial_col = 0,0
+selected_row, selected_col = 0,0
+selected_square
 print(board)
 gameState.start_new_round()
+pawn_change = False
 
 
 while run:
@@ -251,11 +275,33 @@ while run:
     if Dragging and Dragged_Piece:
         draw_moving_image(win,Dragged_Piece,event.pos)
 
+    if pawn_change:
+        print(121212)
+        if gameState.current_color == gameState.human_player:
+            if gameState.current_color == Piece.white:
+                queen_rect = ENLARGED_IMAGES['wQ'].get_rect()
+                knight_rect = ENLARGED_IMAGES['wK'].get_rect()
+            else:
+                queen_rect = ENLARGED_IMAGES['bQ'].get_rect()
+                knight_rect = ENLARGED_IMAGES['bK'].get_rect()
+            queen_rect.center = (0,200)
+            knight_rect.center = (600,400)
+            win.blit(ENLARGED_IMAGES['wQ'], queen_rect)
+            win.blit(ENLARGED_IMAGES['wK'], knight_rect)
+
     for event in p.event.get():
         if event.type == p.QUIT:
             run = False
 
         if event.type == p.MOUSEBUTTONDOWN:
+            if pawn_change:
+                if gameState.current_color == gameState.human_player and gameState.current_color == Piece.white:
+                    if queen_rect.collidepoint(event.pos):  
+                        board[selected_row][selected_col] = Piece.queen
+                    elif knight_rect.collidepoint(event.pos):
+                        board[selected_row][selected_col] = Piece.knight
+                    else:
+                        continue
             #game is over
             if is_checkmate:
                 continue
@@ -271,24 +317,24 @@ while run:
             if is_checkmate:continue
 
 
-            if gameState.current_color == gameState.AI_player:
-                # for move in gameState.final_allowed_moves:
-                #     target_row, target_col = move.target_square
-                #     start_row, start_col = move.start_square
-                #     piece = board[start_row][start_col]
-                #     target_piece = board[target_row][target_col]
-                #     board[start_row][start_col] = 0
-                #     board[target_row][target_col] =piece
-                black_positions_save = copy.copy(gameState.black_positions)
-                white_positions_save = copy.copy(gameState.white_positions)
-                gameState.initial_depth = 3
-                temp_GS = copy.deepcopy(gameState)
-                print(temp_GS.current_color,"BLACK")
-                temp_GS.minmax(3,False,float('-inf'),float('inf'))
-                gameState.best_move = temp_GS.best_move 
-                AI_move(black_positions_save,white_positions_save)
-                gameState.change_current_color()
-                continue
+            # if gameState.current_color == gameState.AI_player:
+            #     # for move in gameState.final_allowed_moves:
+            #     #     target_row, target_col = move.target_square
+            #     #     start_row, start_col = move.start_square
+            #     #     piece = board[start_row][start_col]
+            #     #     target_piece = board[target_row][target_col]
+            #     #     board[start_row][start_col] = 0
+            #     #     board[target_row][target_col] =piece
+            #     black_positions_save = copy.copy(gameState.black_positions)
+            #     white_positions_save = copy.copy(gameState.white_positions)
+            #     gameState.initial_depth = 3
+            #     temp_GS = copy.deepcopy(gameState)
+            #     print(temp_GS.current_color,"BLACK")
+            #     temp_GS.minmax(3,False,float('-inf'),float('inf'))
+            #     gameState.best_move = temp_GS.best_move 
+            #     AI_move(black_positions_save,white_positions_save)
+            #     gameState.change_current_color()
+            #     continue
 
 
             # print("final allowed moves:")
@@ -356,14 +402,17 @@ while run:
                                 board[0][5] = rook_piece
                                 board[0][7] = 0
                     #change pawn to queen or knight            
-                    if row==7 or row==0:
+                    if new_row==7 or new_row==0:
                         if Piece.is_type(board[new_row][new_column],Piece.pawn):
                             board[new_row][new_column] = Piece.queen
+                            pawn_change  = True
+                            selected_row,selected_col = new_row,new_column
                             
+
 
                 else:
                     board[initial_row][initial_col] = Dragged_Piece
-                                    
+
                 selected_square = None
                 Dragging = False
                 Dragged_Piece = None
@@ -372,7 +421,8 @@ while run:
                 #will only change turn when a move is made to a different square
                 if (new_row, new_column)!=(initial_row,initial_col) and is_legal:
                     gameState.check_if_rook_moved(initial_row,initial_col)
-                    gameState.change_current_color()
+                    if not pawn_change:
+                        gameState.change_current_color()
 
             else:
                 is_highlight = False
