@@ -25,3 +25,5 @@ pawns dont become other pieces when they reach the end
 fix func and style of all code later
 
 to increase the speed of minmax: cache already evaluated positions
+
+king can eat something that is putting it in check, even though eating it puts in it check as well

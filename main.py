@@ -40,7 +40,7 @@ def load_images():
         IMAGES[piece] = p.transform.scale(p.image.load('images/'+ piece +'.png'), (SQUARE_SIZE, SQUARE_SIZE))
 
 def load_enlarged_images():
-    pieces = ['wK','wQ']
+    pieces = ['wN','wQ','bN','bQ']
     for piece in pieces:
         ENLARGED_IMAGES[piece] = p.transform.scale(p.image.load('images/'+ piece +'.png'), (2*SQUARE_SIZE, 2*SQUARE_SIZE))
 
@@ -235,12 +235,12 @@ def AI_move(black_positions,white_positions):
     gameState.white_positions = white_positions
             
 
-def decide_queen_or_knight(selected_row, selected_col):
-    if pawn_change:
-        if queen_rect.collidepoint(event.pos):  
-            board[selected_row][selected_col] = Piece.queen
-        elif knight_rect.collidepoint(event.pos):
-            board[selected_row][selected_col] = Piece.knight
+# def decide_queen_or_knight(selected_row, selected_col):
+#     if pawn_change:
+#         if queen_rect.collidepoint(event.pos):  
+#             board[selected_row][selected_col] = Piece.queen
+#         elif knight_rect.collidepoint(event.pos):
+#             board[selected_row][selected_col] = Piece.knight
 
 # white_queen_rect = ENLARGED_IMAGES['wQ'].get_rect()
 
@@ -280,14 +280,14 @@ while run:
         if gameState.current_color == gameState.human_player:
             if gameState.current_color == Piece.white:
                 queen_rect = ENLARGED_IMAGES['wQ'].get_rect()
-                knight_rect = ENLARGED_IMAGES['wK'].get_rect()
+                knight_rect = ENLARGED_IMAGES['wN'].get_rect()
             else:
                 queen_rect = ENLARGED_IMAGES['bQ'].get_rect()
-                knight_rect = ENLARGED_IMAGES['bK'].get_rect()
-            queen_rect.center = (0,200)
+                knight_rect = ENLARGED_IMAGES['bN'].get_rect()
+            queen_rect.center = (600,200)
             knight_rect.center = (600,400)
             win.blit(ENLARGED_IMAGES['wQ'], queen_rect)
-            win.blit(ENLARGED_IMAGES['wK'], knight_rect)
+            win.blit(ENLARGED_IMAGES['wN'], knight_rect)
 
     for event in p.event.get():
         if event.type == p.QUIT:
@@ -297,11 +297,14 @@ while run:
             if pawn_change:
                 if gameState.current_color == gameState.human_player and gameState.current_color == Piece.white:
                     if queen_rect.collidepoint(event.pos):  
-                        board[selected_row][selected_col] = Piece.queen
+                        board[selected_row][selected_col] = gameState.current_color|Piece.queen
                     elif knight_rect.collidepoint(event.pos):
-                        board[selected_row][selected_col] = Piece.knight
+                        board[selected_row][selected_col] = gameState.current_color|Piece.knight
                     else:
                         continue
+                    pawn_change = False
+                    gameState.change_current_color()
+
             #game is over
             if is_checkmate:
                 continue
@@ -404,7 +407,6 @@ while run:
                     #change pawn to queen or knight            
                     if new_row==7 or new_row==0:
                         if Piece.is_type(board[new_row][new_column],Piece.pawn):
-                            board[new_row][new_column] = Piece.queen
                             pawn_change  = True
                             selected_row,selected_col = new_row,new_column
                             
