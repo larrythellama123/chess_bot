@@ -13,7 +13,7 @@ ROWS = 8
 COLS = 8
 SQUARE_SIZE = WIDTH//ROWS
 win = p.display.set_mode((WIDTH,HEIGHT))
-
+text_font = p.font.SysFont("Arial",30)
 p.display.set_caption(('Chess'))
 run  = True
 FPS =60
@@ -44,7 +44,9 @@ def load_enlarged_images():
     for piece in pieces:
         ENLARGED_IMAGES[piece] = p.transform.scale(p.image.load('images/'+ piece +'.png'), (2*SQUARE_SIZE, 2*SQUARE_SIZE))
 
-
+def draw_text(text,font,text_color,x,y):
+    img = font.render(text,True,text_color)
+    win.blit(img,(x,y))
 
 def draw_board(win):
     colors = [WHITE,BLACK]
@@ -182,6 +184,12 @@ def check_legal_moves(initial_row,initial_col, row, col):
     return False
 
 
+def display_checkmate():
+    if gameState.final_allowed_moves == []:
+        print("CHECKMATED")
+        is_checkmate = True
+
+
 def check_piece_usable(clicked_row, clicked_col):
     for move in gameState.final_allowed_moves:
         # Move.print_move(move)
@@ -315,29 +323,29 @@ while run:
 
             #check if checkmated
             if gameState.final_allowed_moves == []:
-                print("CHECKMATED")
                 is_checkmate = True
+            draw_text("CHECKMATED",text_font,(255,0,0),350,350)
             if is_checkmate:continue
 
 
-            # if gameState.current_color == gameState.AI_player:
-            #     # for move in gameState.final_allowed_moves:
-            #     #     target_row, target_col = move.target_square
-            #     #     start_row, start_col = move.start_square
-            #     #     piece = board[start_row][start_col]
-            #     #     target_piece = board[target_row][target_col]
-            #     #     board[start_row][start_col] = 0
-            #     #     board[target_row][target_col] =piece
-            #     black_positions_save = copy.copy(gameState.black_positions)
-            #     white_positions_save = copy.copy(gameState.white_positions)
-            #     gameState.initial_depth = 3
-            #     temp_GS = copy.deepcopy(gameState)
-            #     print(temp_GS.current_color,"BLACK")
-            #     temp_GS.minmax(3,False,float('-inf'),float('inf'))
-            #     gameState.best_move = temp_GS.best_move 
-            #     AI_move(black_positions_save,white_positions_save)
-            #     gameState.change_current_color()
-            #     continue
+            if gameState.current_color == gameState.AI_player:
+                # for move in gameState.final_allowed_moves:
+                #     target_row, target_col = move.target_square
+                #     start_row, start_col = move.start_square
+                #     piece = board[start_row][start_col]
+                #     target_piece = board[target_row][target_col]
+                #     board[start_row][start_col] = 0
+                #     board[target_row][target_col] =piece
+                black_positions_save = copy.copy(gameState.black_positions)
+                white_positions_save = copy.copy(gameState.white_positions)
+                gameState.initial_depth = 3
+                temp_GS = copy.deepcopy(gameState)
+                print(temp_GS.current_color,"BLACK")
+                temp_GS.minmax(3,False,float('-inf'),float('inf'))
+                gameState.best_move = temp_GS.best_move 
+                AI_move(black_positions_save,white_positions_save)
+                gameState.change_current_color()
+                continue
 
 
             # print("final allowed moves:")

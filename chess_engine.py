@@ -81,8 +81,7 @@ class GameState:
 
         self.points = 0
         self.best_move = None
-        self.change_queen = None
-        self.change_knight = None
+        self.changed_pawn = None
         self.visited = []
         self.initial_depth = 0
         #n,s,e,w,ne,nw,se,sw
@@ -664,10 +663,17 @@ class GameState:
     def check_if_pawn_can_change(self,row,col):
         if row==7 or row==0 and Piece.is_type(self.board[row][col],Piece.pawn):
             return True
+    
+    def change_to_knight_or_queen(self,knight_flag,queen_flag):
+        if knight_flag==True:
+            self.changed_pawn = Piece.knight|self.AI_player
+        elif queen_flag==True:
+            self.changed_pawn = Piece.queen|self.AI_player
+
 
     def change_pawn_queen_and_append_back_move(self,row,col,final_allowed_moves,move):
         self.board[row][col] = Piece.queen
-        final_allowed_moves.append(move)
+        # final_allowed_moves.append(move)
 
     def change_pawn_knight(self,row,col):
         self.board[row][col] = Piece.knight
@@ -896,9 +902,8 @@ class GameState:
         final_allowed_moves = copy.copy(self.final_allowed_moves)
         if is_maximising:
             best_score = float("-inf")
-            pawn_changed_into_queen = False
             pawn_to_knight = False
-            pawn_to_queen = True
+            pawn_to_queen = False
             for move in final_allowed_moves:
                 if move in self.visited:
                     continue
@@ -913,11 +918,15 @@ class GameState:
 
                 #check if pawn has reached the end and change it to a queen first
                 #append the move back to the end of the list to check for knight after
-                if not pawn_changed_into_queen and self.check_if_pawn_can_change: 
-                    self.change_pawn_queen_and_append_back_move()
-                    pawn_changed_into_queen = True
-                elif pawn_changed_into_queen and self.check_if_pawn_can_change:
+                if self.check_if_pawn_can_change(target_row,target_col): 
+                    self.change_pawn_queen_and_append_back_move(target_row,target_col,final_allowed_moves,move)
+                    pawn_to_queen = True
+                    pawn_to_knight = False
+                elif pawn_to_queen and self.check_if_pawn_can_change(target_row,target_col):
                     self.change_pawn_knight()
+                    pawn_to_knight = True
+                    pawn_to_queen = False
+
                 if self.current_color == Piece.black:
                     self.black_positions.remove((start_row,start_col))
                     self.black_positions.append((target_row,target_col))
@@ -930,15 +939,10 @@ class GameState:
                     if (target_row,target_col) in self.black_positions:
                         self.black_positions.remove((target_row,target_col))
                         was_removed = True
-                if not pawn_changed_into_queen and self.check_if_pawn_can_change: 
-                    self.change_pawn_queen_and_append_back_move()
-                    pawn_changed_into_queen = True
-                elif pawn_changed_into_queen and self.check_if_pawn_can_change:
-                    self.change_pawn_knight()
+
+
                 self.change_current_color()
-
                 score = self.minmax(depth-1, False,alpha,beta)
-
                 self.change_current_color()
                 
                 if self.current_color == Piece.black:
@@ -956,6 +960,8 @@ class GameState:
 
                 if score>best_score:
                     if depth==self.initial_depth:
+                        if self.check_if_pawn_can_change(target_row,target_col):
+                            self.change_to_knight_or_queen(pawn_to_knight,pawn_to_queen)
                         self.best_move = move
                     best_score = score
                 alpha = max(alpha, best_score)
@@ -965,7 +971,6 @@ class GameState:
         else:
 
             best_score = float("inf")
-            pawn_changed_into_queen = False
             pawn_to_knight = False
             pawn_to_queen = False
             for move in final_allowed_moves:
@@ -979,6 +984,15 @@ class GameState:
                 target_piece = self.board[target_row][target_col]
                 self.board[start_row][start_col] = 0
                 self.board[target_row][target_col] = piece
+
+                if self.check_if_pawn_can_change(target_row,target_col): 
+                    self.change_pawn_queen_and_append_back_move(target_row,target_col,final_allowed_moves,move)
+                    pawn_to_queen = True
+                    pawn_to_knight = False
+                elif pawn_to_queen and self.check_if_pawn_can_change(target_row,target_col):
+                    self.change_pawn_knight()
+                    pawn_to_knight = True
+                    pawn_to_queen = False
                 #reverse these changes to the positions
                 if self.current_color == Piece.black:
                     self.black_positions.remove((start_row,start_col))
@@ -993,15 +1007,9 @@ class GameState:
                         self.black_positions.remove((target_row,target_col))
                         was_removed = True
 
-                if not pawn_changed_into_queen and self.check_if_pawn_can_change: 
-                    self.change_pawn_queen_and_append_back_move()
-                    pawn_changed_into_queen = True
-                elif pawn_changed_into_queen and self.check_if_pawn_can_change:
-                    self.change_pawn_knight()
 
                 self.change_current_color()
                 score = self.minmax(depth-1,True,alpha,beta)
-
                 self.change_current_color() 
 
                 if self.current_color == Piece.black:
@@ -1017,15 +1025,12 @@ class GameState:
                         self.black_positions.append((target_row,target_col))
                 self.board[start_row][start_col] = piece
                 self.board[target_row][target_col] = target_piece
-
+    
                 
                 if score<best_score:
                     if depth==self.initial_depth:
-                        if pawn_to_knight:
-                            self.change_knight = True
-                            self.change_queen = False
-                        elif pawn_to_queen:
-                            self.change_queen
+                        if self.check_if_pawn_can_change(target_row,target_col):
+                            self.change_to_knight_or_queen(pawn_to_knight,pawn_to_queen)
                         self.best_move = move
                     best_score = score
                 beta = min(beta, best_score)
