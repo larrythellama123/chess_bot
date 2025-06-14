@@ -79,6 +79,8 @@ class GameState:
         self.WkingMove = False
         self.BkingMove = False
 
+        self.castle_flags ={'WrookRMove':False,'WrookLMove':False,'BrookLMove':False,'BrookRMove':False,'WkingMove':False,'BkingMove':False}
+
         self.points = 0
         self.best_move = None
         self.changed_pawn = None
@@ -801,30 +803,57 @@ class GameState:
 
             
 
-    def check_if_rook_moved(self,square_row,square_col):
+    def resetting_back_changed_castling_flags(self,recent_changed_castle_flags):
+        for key in recent_changed_castle_flags:
+            if recent_changed_castle_flags[key]!=self.castle_flags[key]:
+                self.castle_flags[key] = not self.castle_flags[key]
+                recent_changed_castle_flags[key] = self.castle_flags[key]
+
+
+    # def check_if_rook_king_moved(self,square_row,square_col,recent_changed_castle_flags):
+
+    #     if (square_row,square_col) == (7,7):
+    #         self.WrookRMove = True
+
+    #     if (square_row,square_col) == (7,0):
+    #         self.WrookLMove = True
+
+    #     if (square_row,square_col) == (0,0):
+    #         self.BrookLMove = True
+
+    #     if (square_row,square_col) == (0,7):
+    #         self.BrookRMove = True
+
+    #     if (square_row,square_col) == (7,4):
+    #         self.WkingMove = True
+
+    #     if (square_row,square_col) == (0,4):
+    #         self.BkingMove = True
+
+    def check_if_rook_king_moved(self,square_row,square_col):
 
         if (square_row,square_col) == (7,7):
-            self.WrookRMove = True
+            self.castle_flags['WRookRMove'] = True
 
         if (square_row,square_col) == (7,0):
-            self.WrookLMove = True
+            self.castle_flags['WRookLMove'] = True
 
         if (square_row,square_col) == (0,0):
-            self.BrookLMove = True
+            self.castle_flags['BRookLMove'] = True
 
         if (square_row,square_col) == (0,7):
-            self.BrookRMove = True
+            self.castle_flags['BRookRMove'] = True
 
         if (square_row,square_col) == (7,4):
-            self.WkingMove = True
+            self.castle_flags['WkingMove'] = True
 
         if (square_row,square_col) == (0,4):
-            self.BkingMove = True
+            self.castle_flags['BkingMove'] = True
 
     def build_castle_moves(self):
         if self.current_color == Piece.black:
             if self.board[0][5]==0 and self.board[0][6] == 0:
-                if not self.BrookRMove and not self.BkingMove:
+                if not self.castle_flags['BrookRMove'] and not self.castle_flags['BkingMove']:
                     self.king_side_white_castling = True
                     king_move = Move()
                     king_move.start_square = (0,4)
@@ -834,7 +863,7 @@ class GameState:
                     self.total_moves[king_move.start_square].append(king_move)
                 
             if self.board[0][1] == 0 and self.board[0][2]==0 and self.board[0][3]==0:
-                if not self.BrookLMove and not self.BkingMove:
+                if not self.castle_flags['BrookLMove'] and not self.castle_flags['BkingMove']:
                     self.queen_side_white_castling = True
                     king_move = Move()
                     king_move.start_square = (0,4)
@@ -844,7 +873,7 @@ class GameState:
                     self.total_moves[king_move.start_square].append(king_move)
         else:
             if self.board[7][5]==0 and self.board[7][6] == 0:
-                if not self.WrookRMove and not self.WkingMove:
+                if not self.castle_flags['WrookRMove'] and not self.castle_flags['WkingMove']:
                     self.king_side_black_castling = True
                     king_move = Move()
                     king_move.start_square = (7,4)
@@ -855,7 +884,7 @@ class GameState:
 
                 
             if self.board[7][1] == 0 and self.board[7][2]==0 and self.board[7][3]==0:
-                if not self.WrookLMove and not self.WkingMove:
+                if not self.castle_flags['WrookLMove'] and not self.castle_flags['WkingMove']:
                     self.queen_side_black_castling = True
                     king_move = Move()
                     king_move.start_square = (7,4)
@@ -900,10 +929,11 @@ class GameState:
             return self.evaluate()
 
         final_allowed_moves = copy.copy(self.final_allowed_moves)
+        recent_changed_castle_flags = copy.copy(self.castle_flags)
+        pawn_to_knight = False
+        pawn_to_queen = False
         if is_maximising:
             best_score = float("-inf")
-            pawn_to_knight = False
-            pawn_to_queen = False
             for move in final_allowed_moves:
                 if move in self.visited:
                     continue
@@ -926,7 +956,7 @@ class GameState:
                     self.change_pawn_knight()
                     pawn_to_knight = True
                     pawn_to_queen = False
-
+                self.check_if_rook_king_moved(start_row,start_col)
                 if self.current_color == Piece.black:
                     self.black_positions.remove((start_row,start_col))
                     self.black_positions.append((target_row,target_col))
@@ -939,12 +969,11 @@ class GameState:
                     if (target_row,target_col) in self.black_positions:
                         self.black_positions.remove((target_row,target_col))
                         was_removed = True
-
-
                 self.change_current_color()
                 score = self.minmax(depth-1, False,alpha,beta)
                 self.change_current_color()
                 
+                self.resetting_back_changed_castling_flags(recent_changed_castle_flags)
                 if self.current_color == Piece.black:
                     self.black_positions.remove((target_row,target_col))
                     self.black_positions.append((start_row,start_col))
@@ -971,8 +1000,6 @@ class GameState:
         else:
 
             best_score = float("inf")
-            pawn_to_knight = False
-            pawn_to_queen = False
             for move in final_allowed_moves:
                 if move in self.visited:
                     continue
@@ -993,8 +1020,12 @@ class GameState:
                     self.change_pawn_knight()
                     pawn_to_knight = True
                     pawn_to_queen = False
+                self.check_if_rook_king_moved(start_row,start_col)
                 #reverse these changes to the positions
                 if self.current_color == Piece.black:
+                    print((start_row,start_col),"fked uup one",self.board[start_row][start_col])
+                    print((target_row,target_col),"fked uup 2",self.board[target_row][target_col])
+                    print(recent_changed_castle_flags, 'yeye', self.castle_flags, 'depth',depth)
                     self.black_positions.remove((start_row,start_col))
                     self.black_positions.append((target_row,target_col))
                     if (target_row,target_col) in self.white_positions:
@@ -1012,6 +1043,7 @@ class GameState:
                 score = self.minmax(depth-1,True,alpha,beta)
                 self.change_current_color() 
 
+                self.resetting_back_changed_castling_flags(recent_changed_castle_flags)
                 if self.current_color == Piece.black:
                     self.black_positions.remove((target_row,target_col))
                     self.black_positions.append((start_row,start_col))

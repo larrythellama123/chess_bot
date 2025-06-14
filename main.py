@@ -12,6 +12,7 @@ HEIGHT = 800
 ROWS = 8
 COLS = 8
 SQUARE_SIZE = WIDTH//ROWS
+p.init()
 win = p.display.set_mode((WIDTH,HEIGHT))
 text_font = p.font.SysFont("Arial",30)
 p.display.set_caption(('Chess'))
@@ -241,6 +242,7 @@ def AI_move(black_positions,white_positions):
 
     gameState.black_positions = black_positions
     gameState.white_positions = white_positions
+    gameState.check_if_rook_king_moved(initial_row,initial_col)
             
 
 # def decide_queen_or_knight(selected_row, selected_col):
@@ -297,6 +299,10 @@ while run:
             win.blit(ENLARGED_IMAGES['wQ'], queen_rect)
             win.blit(ENLARGED_IMAGES['wN'], knight_rect)
 
+    if is_checkmate:
+        draw_text("CHECKMATED",text_font,(255,0,0),350,350)
+        continue
+
     for event in p.event.get():
         if event.type == p.QUIT:
             run = False
@@ -324,9 +330,6 @@ while run:
             #check if checkmated
             if gameState.final_allowed_moves == []:
                 is_checkmate = True
-            draw_text("CHECKMATED",text_font,(255,0,0),350,350)
-            if is_checkmate:continue
-
 
             if gameState.current_color == gameState.AI_player:
                 # for move in gameState.final_allowed_moves:
@@ -416,12 +419,10 @@ while run:
                     if new_row==7 or new_row==0:
                         if Piece.is_type(board[new_row][new_column],Piece.pawn):
                             pawn_change  = True
-                            selected_row,selected_col = new_row,new_column
-                            
-
-
+                            selected_row,selected_col = new_row,new_column         
                 else:
                     board[initial_row][initial_col] = Dragged_Piece
+                    
 
                 selected_square = None
                 Dragging = False
@@ -430,7 +431,7 @@ while run:
                 #check if rook or king is moved if a legit move is made 
                 #will only change turn when a move is made to a different square
                 if (new_row, new_column)!=(initial_row,initial_col) and is_legal:
-                    gameState.check_if_rook_moved(initial_row,initial_col)
+                    gameState.check_if_rook_king_moved(initial_row,initial_col)
                     if not pawn_change:
                         gameState.change_current_color()
 

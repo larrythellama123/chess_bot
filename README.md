@@ -13,7 +13,7 @@ king is primarily the one moving
 Black pieces pick illogical decisions
     
 issues with minmax:
-the black king positions sometimes seems to be removed from the list even though it was the best move
+
 if the black king is in check, it seems as if the white king is in check as well
 
 
