@@ -219,7 +219,7 @@ def AI_move(black_positions,white_positions):
         if (new_row, new_column) in black_positions:
             black_positions.remove((new_row,new_column))
     
-    if Piece.is_type(moving_piece,Piece.king):
+    if Piece.is_type(moving_piece,Piece.king):  
         if (initial_row,initial_col) == (7,4):
             if(new_row, new_column) == (7,2):
                 rook_piece = board[7][0]
@@ -270,7 +270,7 @@ initial_row, initial_col = 0,0
 selected_row, selected_col = 0,0
 selected_square
 print(board)
-gameState.start_new_round()
+# gameState.start_new_round()
 pawn_change = False
 
 
@@ -322,9 +322,9 @@ while run:
            
             # print(f"new moves:{gameState.total_moves}")
             print("NEW MOVE")
+            print(gameState.current_color)
             gameState.start_new_round()
             gameState.filter_illegal_moves()
-
             if is_checkmate:
                 continue
             else:
@@ -335,24 +335,25 @@ while run:
             #check if checkmated
             
 
-            # if gameState.current_color == gameState.AI_player:
-            #     # for move in gameState.final_allowed_moves:
-            #     #     target_row, target_col = move.target_square
-            #     #     start_row, start_col = move.start_square
-            #     #     piece = board[start_row][start_col]
-            #     #     target_piece = board[target_row][target_col]
-            #     #     board[start_row][start_col] = 0
-            #     #     board[target_row][target_col] =piece
-            #     black_positions_save = copy.copy(gameState.black_positions)
-            #     white_positions_save = copy.copy(gameState.white_positions)
-            #     gameState.initial_depth = 3
-            #     temp_GS = copy.deepcopy(gameState)
-            #     print(temp_GS.current_color,"BLACK")
-            #     temp_GS.minmax(gameState.initial_depth,False,float('-inf'),float('inf'))
-            #     gameState.best_move = temp_GS.best_move 
-            #     AI_move(black_positions_save,white_positions_save)
-            #     gameState.change_current_color()
-            #     continue
+            if gameState.current_color == gameState.AI_player:
+                print("here")
+                # for move in gameState.final_allowed_moves:
+                #     target_row, target_col = move.target_square
+                #     start_row, start_col = move.start_square
+                #     piece = board[start_row][start_col]
+                #     target_piece = board[target_row][target_col]
+                #     board[start_row][start_col] = 0
+                #     board[target_row][target_col] =piece
+                black_positions_save = copy.copy(gameState.black_positions)
+                white_positions_save = copy.copy(gameState.white_positions)
+                gameState.initial_depth = 3
+                temp_GS = copy.deepcopy(gameState)
+                print(temp_GS.current_color,"BLACK")
+                temp_GS.minmax(gameState.initial_depth,False,float('-inf'),float('inf'))
+                gameState.best_move = temp_GS.best_move 
+                AI_move(black_positions_save,white_positions_save)
+                gameState.change_current_color()
+                continue
 
 
             # print("final allowed moves:")
