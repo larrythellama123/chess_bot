@@ -301,7 +301,6 @@ while run:
 
     if is_checkmate:
         draw_text("CHECKMATED",text_font,(255,0,0),350,350)
-        continue
 
     for event in p.event.get():
         if event.type == p.QUIT:
@@ -320,35 +319,40 @@ while run:
                     gameState.change_current_color()
 
             #game is over
-            if is_checkmate:
-                continue
+           
             # print(f"new moves:{gameState.total_moves}")
             print("NEW MOVE")
             gameState.start_new_round()
             gameState.filter_illegal_moves()
 
-            #check if checkmated
-            if gameState.final_allowed_moves == []:
-                is_checkmate = True
-
-            if gameState.current_color == gameState.AI_player:
-                # for move in gameState.final_allowed_moves:
-                #     target_row, target_col = move.target_square
-                #     start_row, start_col = move.start_square
-                #     piece = board[start_row][start_col]
-                #     target_piece = board[target_row][target_col]
-                #     board[start_row][start_col] = 0
-                #     board[target_row][target_col] =piece
-                black_positions_save = copy.copy(gameState.black_positions)
-                white_positions_save = copy.copy(gameState.white_positions)
-                gameState.initial_depth = 3
-                temp_GS = copy.deepcopy(gameState)
-                print(temp_GS.current_color,"BLACK")
-                temp_GS.minmax(3,False,float('-inf'),float('inf'))
-                gameState.best_move = temp_GS.best_move 
-                AI_move(black_positions_save,white_positions_save)
-                gameState.change_current_color()
+            if is_checkmate:
                 continue
+            else:
+                if gameState.final_allowed_moves == []:
+                    is_checkmate = True
+                    continue
+
+            #check if checkmated
+            
+
+            # if gameState.current_color == gameState.AI_player:
+            #     # for move in gameState.final_allowed_moves:
+            #     #     target_row, target_col = move.target_square
+            #     #     start_row, start_col = move.start_square
+            #     #     piece = board[start_row][start_col]
+            #     #     target_piece = board[target_row][target_col]
+            #     #     board[start_row][start_col] = 0
+            #     #     board[target_row][target_col] =piece
+            #     black_positions_save = copy.copy(gameState.black_positions)
+            #     white_positions_save = copy.copy(gameState.white_positions)
+            #     gameState.initial_depth = 3
+            #     temp_GS = copy.deepcopy(gameState)
+            #     print(temp_GS.current_color,"BLACK")
+            #     temp_GS.minmax(gameState.initial_depth,False,float('-inf'),float('inf'))
+            #     gameState.best_move = temp_GS.best_move 
+            #     AI_move(black_positions_save,white_positions_save)
+            #     gameState.change_current_color()
+            #     continue
 
 
             # print("final allowed moves:")
@@ -440,14 +444,7 @@ while run:
                 board[initial_row][initial_col] = Dragged_Piece
                 selected_square = None
                 Dragging = False
-                Dragged_Piece = None
-
-                
-  
-
-
-                
-            
+                Dragged_Piece = None          
 
     p.display.update()
 p.quit()
