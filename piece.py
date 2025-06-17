@@ -45,7 +45,4 @@ class pieces:
             return self.white
         else:
             return self.black
-
-
-        
-        
+    
