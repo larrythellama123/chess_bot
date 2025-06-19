@@ -165,6 +165,9 @@ class EnhancedEvaluation:
         # King safety evaluation
         white_eval.pawn_shield_score = self.king_pawn_shield(game_state, Piece.white, black_material)
         black_eval.pawn_shield_score = self.king_pawn_shield(game_state, Piece.black, white_material)
+
+        white_eval.king_safety = self.evaluate_king_safety(game_state, Piece.white, black_material)
+        black_eval.king_safety = self.evaluate_king_safety(game_state, Piece.black, white_material)
         
         # Calculate final evaluation
         perspective = 1 if game_state.current_color == Piece.white else -1
@@ -380,6 +383,62 @@ class EnhancedEvaluation:
         pawn_shield_weight = 1 - enemy_material.endgame_t
         
         return int(-penalty * pawn_shield_weight)
+    
+    def evaluate_king_safety(self,game_state):
+        """Evaluate king safety based on pawn shield and piece proximity"""
+        points = 0
+
+        # Find kings
+        white_king_pos = None
+        black_king_pos = None
+
+        for row, col in self.white_positions:
+            if Piece.is_type(self.board[row][col], Piece.king):
+                white_king_pos = (row, col)
+                break
+
+        for row, col in self.black_positions:
+            if Piece.is_type(self.board[row][col], Piece.king):
+                black_king_pos = (row, col)
+                break
+
+        if white_king_pos:
+            points += self.evaluate_single_king_safety(white_king_pos, Piece.white)
+
+        if black_king_pos:
+            points -= self.evaluate_single_king_safety(black_king_pos, Piece.black)
+
+        return points
+
+    def evaluate_single_king_safety(self, king_pos, color):
+        """Evaluate safety for a single king"""
+        king_row, king_col = king_pos
+        safety_score = 0
+
+        # Check pawn shield
+        if color == Piece.white:
+            # Check pawns in front of king
+            shield_positions = [(king_row-1, king_col-1), (king_row-1, king_col), (king_row-1, king_col+1)]
+            for shield_row, shield_col in shield_positions:
+                if 0 <= shield_row < 8 and 0 <= shield_col < 8:
+                    piece = self.board[shield_row][shield_col]
+                    if Piece.is_type(piece, Piece.pawn) and Piece.is_color(piece, Piece.white, True):
+                        safety_score += 0.5
+        else:
+            # Check pawns in front of black king
+            shield_positions = [(king_row+1, king_col-1), (king_row+1, king_col), (king_row+1, king_col+1)]
+            for shield_row, shield_col in shield_positions:
+                if 0 <= shield_row < 8 and 0 <= shield_col < 8:
+                    piece = self.board[shield_row][shield_col]
+                    if Piece.is_type(piece, Piece.pawn) and Piece.is_color(piece, Piece.black, True):
+                        safety_score += 0.5
+
+        # Penalty for king in center during middle game
+        if 2 <= king_row <= 5 and 2 <= king_col <= 5:
+            safety_score -= 1.0
+
+        return safety_score
+
 
 
 class EvaluationData:
@@ -390,11 +449,12 @@ class EvaluationData:
         self.piece_square_score = 0
         self.pawn_score = 0
         self.pawn_shield_score = 0
+        self.king_safety = 0
     
     def sum(self):
         return (self.material_score + self.mop_up_score + 
                 self.piece_square_score + self.pawn_score + 
-                self.pawn_shield_score)
+                self.pawn_shield_score + self.king_safety)
 
 
 class MaterialInfo:

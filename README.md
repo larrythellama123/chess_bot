@@ -13,6 +13,10 @@ eval function needs tweaking:
 issues with move gen:
 
 make the code more efficient to run at depth of 4
-implement move ordering to help with alpha beta pruning
-function to check if there are going to be any captures left 
 force king to corner
+
+
+recurring issues:
+self.check_for_captures results in rechecking of the same moves
+unable to do a smooth 4 step ahead bot
+the king is still being chosen as the primary move sometimes
