@@ -486,6 +486,3 @@ class MaterialInfo:
                              num_knights * knight_endgame_weight)
         
         self.endgame_t = 1 - min(1, endgame_weight_sum / endgame_start_weight)
-
-
-
