@@ -20,3 +20,6 @@ recurring issues:
 self.check_for_captures results in rechecking of the same moves
 unable to do a smooth 4 step ahead bot
 the king is still being chosen as the primary move sometimes
+
+
+everything is wacky easy captures are not being chosen and thr king is still being moved here and there
