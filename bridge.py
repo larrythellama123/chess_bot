@@ -27,7 +27,6 @@ class GameStateConverter:
     def gamestate_to_chess_board(self, game_state):
         board = chess.Board()  # Empty board
         board.clear()
-        
         # Convert your board to standard format
         for row in range(8):
             for col in range(8):
@@ -62,9 +61,12 @@ class GameStateConverter:
             # Convert to UCI notation
             start_uci = self.coords_to_uci(move.start_square)
             target_uci = self.coords_to_uci(move.target_square)
+            print(move.start_square)
+            print(move.target_square)
             
             # Create UCI move string
             uci_move = start_uci + target_uci
+            print(uci_move,"uci_move")
             
             # Create chess.Move object from UCI
             chess_move = chess.Move.from_uci(uci_move)
@@ -78,6 +80,7 @@ class GameStateConverter:
         
         # Convert column to file letter (0->a, 1->b, ..., 7->h)
         file = chr(ord('a') + col)
+        print(file,"file")
         
         # Convert row to rank number
         # Adjust this based on your coordinate system:
@@ -91,8 +94,9 @@ class GameStateConverter:
         target_square = move_uci[2:]
 
         move = Move()
-        move.start_square = (ord([start_square[0]])-1,start_square[1])
-        move.target_square = (ord([target_square[0]])-1,target_square[1])
+        move.start_square = (int(start_square[1])-1,ord(start_square[0])-96)
+        move.target_square = (int(target_square[1])-1,ord(target_square[0])-96)
+        
         return move
 
     

@@ -6,6 +6,7 @@ from move import Move
 import copy
 from finalpredict import load_model_and_predict_move
 from bridge import GameStateConverter
+gameStateConverter = GameStateConverter()
 
 Piece = pieces()
 
@@ -202,12 +203,13 @@ def check_piece_usable(clicked_row, clicked_col):
         
 
 def NN_move(best_move):
+
+    print("Alright, show me the best move:", best_move.start_square,best_move.target_square)
     initial_row,initial_col = best_move.start_square
     new_row,new_column = best_move.target_square
-    moving_piece = board[initial_row][initial_col]
-    board[new_row][new_column] = moving_piece
-    board[initial_row][initial_col] = 0
-
+    moving_piece = gameState.board[initial_row][initial_col]
+    gameState.board[new_row][new_column] = moving_piece
+    gameState.board[initial_row][initial_col] = 0
     if gameState.AI_player == Piece.black:
         gameState.black_positions.remove((initial_row,initial_col))
         gameState.black_positions.append((new_row,new_column))
@@ -241,6 +243,7 @@ def NN_move(best_move):
                 board[0][5] = rook_piece
                 board[0][7] = 0
 
+    board = gameState.board
     gameState.check_if_rook_king_moved(initial_row,initial_col)
     
 
@@ -403,9 +406,9 @@ while run:
 
             #NN code
             if gameState.current_color == gameState.AI_player:
-                board_uci = GameStateConverter.gamestate_to_chess_board(gameState.board)
-                best_move_uci = load_model_and_predict_move(board_uci)
-                best_move = GameStateConverter.coords_to_uci(best_move_uci)
+                board_uci = gameStateConverter.gamestate_to_chess_board(gameState)
+                best_move_uci = load_model_and_predict_move(board_uci, gameState)
+                best_move = gameStateConverter.uci_to_coords(best_move_uci)
                 NN_move(best_move)
                 gameState.change_current_color()
                 continue

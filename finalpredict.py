@@ -8,9 +8,10 @@ from model import ChessModel
 import pickle
 import numpy as np
 from  bridge import GameStateConverter
+gameStateConverter = GameStateConverter()
     
 
-def load_model_and_predict_move(board):
+def load_model_and_predict_move(board, game_state):
 
     with open("models/heavy_move_to_int", "rb") as file:
         move_to_int = pickle.load(file)
@@ -38,7 +39,8 @@ def load_model_and_predict_move(board):
         logits = logits.squeeze(0)  # Remove batch dimension
         
         probabilities = torch.softmax(logits, dim=0).cpu().numpy()  # Convert to probabilities
-        legal_moves = list(GameStateConverter.get_legal_moves_uci())
+        legal_moves = list(gameStateConverter.get_legal_moves_uci(game_state))
+        print("All the legal moves",legal_moves)
         legal_moves_uci = [move.uci() for move in legal_moves]
         sorted_indices = np.argsort(probabilities)[::-1]
         for move_index in sorted_indices:
@@ -48,12 +50,9 @@ def load_model_and_predict_move(board):
         
         return None
 
-    # Initialize a chess board
-    GameStateConverter.gamestate_to_chess_board()
-
     # Predict and make a move
     best_move = predict_move(board)
-    board.push_uci(best_move)
+    return best_move
 
 
 
