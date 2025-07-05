@@ -1,5 +1,5 @@
 import numpy as np
-from chess import Board
+from chess import Board, SQUARES
 
 piece_map = {
         'p': 0, 'n': 1, 'b': 2, 'r': 3, 'q': 4, 'k': 5,
@@ -9,7 +9,7 @@ piece_map = {
 def board_to_matrix(board:Board):
     #he adds 13the board for legal moves?
     matrix = np.zeros((8, 8, 13), dtype=np.int8)
-    for square in chess.SQUARES:
+    for square in SQUARES:
         piece = board.piece_at(square)
         if piece:
             row, col = divmod(square, 8)
