@@ -94,8 +94,8 @@ class GameStateConverter:
         target_square = move_uci[2:]
 
         move = Move()
-        move.start_square = (int(start_square[1])-1,ord(start_square[0])-96)
-        move.target_square = (int(target_square[1])-1,ord(target_square[0])-96)
+        move.start_square = (int(start_square[1])-1,ord(start_square[0])-97)
+        move.target_square = (int(target_square[1])-1,ord(target_square[0])-97)
         
         return move
 

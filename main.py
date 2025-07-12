@@ -207,9 +207,9 @@ def NN_move(best_move):
     print("Alright, show me the best move:", best_move.start_square,best_move.target_square)
     initial_row,initial_col = best_move.start_square
     new_row,new_column = best_move.target_square
-    moving_piece = gameState.board[initial_row][initial_col]
-    gameState.board[new_row][new_column] = moving_piece
-    gameState.board[initial_row][initial_col] = 0
+    moving_piece = board[initial_row][initial_col]
+    board[new_row][new_column] = moving_piece
+    board[initial_row][initial_col] = 0
     if gameState.AI_player == Piece.black:
         gameState.black_positions.remove((initial_row,initial_col))
         gameState.black_positions.append((new_row,new_column))
@@ -243,7 +243,7 @@ def NN_move(best_move):
                 board[0][5] = rook_piece
                 board[0][7] = 0
 
-    board = gameState.board
+    
     gameState.check_if_rook_king_moved(initial_row,initial_col)
     
 
