@@ -40,6 +40,8 @@ class GameState:
 
     def __init__(self):
         self.fen_string =  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
+        
+        
         self.board = [[0 for j in range(8)] for i in range(8)]
         #experimental
         self.final_allowed_moves = [] 
@@ -134,6 +136,13 @@ class GameState:
                 piece_color = Piece.black
             self.board[row][col] = piece_color|piece_type
             col += 1
+
+        # self.board[0][7] = 0 
+        # self.board[1][7] = 0 
+        # self.board[0][6] = 0 
+        # self.board[1][6] = 0 
+
+        # self.board[3][7] = Piece.white|Piece.queen
 
         return self.board
 
@@ -300,8 +309,6 @@ class GameState:
 
         color = Piece.get_piece_color(self.board[start_square_row][start_square_col])  
         if Piece.is_type(self.board[start_square_row][start_square_col],Piece.bishop):
-            #generate attack sqaures for the config of opp pieces first            
-
             self.generate_sliding_moves(start_square_row, start_square_col,Piece.bishop,color, square_dict)
         
         if Piece.is_type(self.board[start_square_row][start_square_col],Piece.rook):
@@ -716,19 +723,23 @@ class GameState:
         
     def filter_illegal_moves(self):
         self.final_allowed_moves = []
+
         #if under check, get all the legal moves to be made
         #if one of those moves intercepts the path of check 
         attack_squares = self.create_list_attack_squares()
+        
         if self.current_color == Piece.white:
-            # self.black_positions.clear()
             #filter list of new attack squares agaist the old ones
             self.filter(self.attack_squares, self.black_positions, attack_squares)
             self.temp_attack_squares = self.attack_squares
             #redo the list of attack squares for the current player to use 
             attack_squares = self.create_list_attack_squares()
-            # self.white_positions.clear()
-            self.filter(self.total_moves, self.white_positions, attack_squares, is_current_player=True)
-            self.under_check()
+            if self.checked_path:
+                self.under_check(self.total_moves, self.white_positions, attack_squares, is_current_player=True)
+            else:
+                self.filter(self.total_moves, self.white_positions, attack_squares, is_current_player=True)
+                self.add_remainder_moves()
+
                                 
         else:
             # self.white_positions.clear()
@@ -737,31 +748,13 @@ class GameState:
             #redo the list of attack squares for the current player to use 
             attack_squares = self.create_list_attack_squares()
             # self.black_positions.clear()
-            self.filter(self.total_moves, self.black_positions, attack_squares, is_current_player=True)
-            self.under_check()
 
+            if self.checked_path:
+                self.under_check(self.total_moves, self.black_positions, attack_squares, is_current_player=True)
+            else:
+                self.filter(self.total_moves, self.black_positions, attack_squares, is_current_player=True)
+                self.add_remainder_moves()
 
-    def filter_illegal_moves_minmax(self):
-        self.final_allowed_moves = []
-        #if under check, get all the legal moves to be made
-        #if one of those moves intercepts the path of check 
-        attack_squares = self.create_list_attack_squares()
-        if self.current_color == Piece.white:
-            #filter list of new attack squares agaist the old ones
-            self.filter_minmax(self.attack_squares, attack_squares)
-            self.temp_attack_squares = self.attack_squares
-            #redo the list of attack squares for the current player to use 
-            attack_squares = self.create_list_attack_squares()
-            self.filter_minmax(self.total_moves, attack_squares, is_current_player=True)
-            self.under_check()
-                                
-        else:
-            self.filter_minmax(self.attack_squares, attack_squares)
-            self.temp_attack_squares = self.attack_squares
-            #redo the list of attack squares for the current player to use 
-            attack_squares = self.create_list_attack_squares()
-            self.filter_minmax(self.total_moves, attack_squares, is_current_player=True)
-            self.under_check()
 
 
 
@@ -779,20 +772,50 @@ class GameState:
             if move in self.final_allowed_moves:
                 self.final_allowed_moves.remove(move)
 
-    def under_check(self):
-        total_moves = self.create_list_of_total_moves()
-        #pick from the list of final allowed moves
-        # temp_final_allowed_moves = []
-  
-        if self.checked_path:       
-            for checked_move in self.checked_path:
-                for move in total_moves:
-                    self.remove_castle_moves(move,total_moves)
-                    if move.target_square == checked_move.target_square or move.target_square == checked_move.start_square:
-                        self.final_allowed_moves.append(move)
+    def under_check(self, square_dict, positions, attack_squares, is_current_player=False):
+        for start_square in square_dict:
+            # filter king moves that would put it under check again
+            row,col = start_square
+            remove_list = []
+            if Piece.is_type(self.board[row][col], Piece.king) and Piece.is_color(self.board[row][col],self.current_color):
+                #should not rmeove while iterating
+                for move in square_dict[start_square]:
+                    for square in attack_squares:
+                       
+                        if move.target_square == square.target_square:
+                            print("king moves to put it in check",move.start_square,move.target_square)
+                            s_row, s_col = square.start_square
+                            print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
+                            remove_list.append(move)
+                            break
 
-        else:
-            self.final_allowed_moves.extend(total_moves)
+                    for square in self.attacker_defended_squares:
+                        if move.target_square == square:
+                            print("king moves to put it in check",move.start_square,move.target_square)
+                            s_row, s_col = square
+                            print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
+                            if move not in remove_list:
+                                remove_list.append(move)
+                            break
+
+                for move in remove_list:
+                    square_dict[start_square].remove(move)
+
+                if is_current_player:
+                    self.final_allowed_moves.extend(square_dict[start_square])
+
+        total_moves = self.create_list_of_total_moves()
+        for move in total_moves:
+            self.remove_castle_moves(move,total_moves)
+            for checked_move in self.checked_path:
+                row, col  = move.start_square
+                if (move.target_square == checked_move.target_square or move.target_square==checked_move.start_square):
+                    self.final_allowed_moves.append(move)
+
+    def add_remainder_moves(self):
+        total_moves = self.create_list_of_total_moves()
+        self.final_allowed_moves.extend(total_moves)
+          
 
 
         
@@ -858,66 +881,7 @@ class GameState:
             del square_dict[start_square]
 
             
-    def filter_minmax(self, square_dict, attack_squares, is_current_player=False):
 
-        remove_start_squares = []
-        for start_square in square_dict:
-            #filter king moves that would put it under check
-            row,col = start_square
-            remove_list = []
-            if Piece.is_type(self.board[row][col], Piece.king) and Piece.is_color(self.board[row][col],self.current_color):
-                #should not rmeove while iterating
-                for move in square_dict[start_square]:
-                    for square in attack_squares:
-                       
-                        if move.target_square == square.target_square:
-                            print("king moves to put it in check",move.start_square,move.target_square)
-                            s_row, s_col = square.start_square
-                            print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
-                            remove_list.append(move)
-                            break
-
-                    for square in self.attacker_defended_squares:
-                        if move.target_square == square:
-                            print("king moves to put it in check",move.start_square,move.target_square)
-                            s_row, s_col = square
-                            print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
-                            if move not in remove_list:
-                                remove_list.append(move)
-                            break
-
-                for move in remove_list:
-                    square_dict[start_square].remove(move)
-
-                if is_current_player:
-                    self.final_allowed_moves.extend(square_dict[start_square])
-
-            
-
-            #implement 2 methods, check if the piece can end the life of the opp piece pinning it 
-            #but first check if more than one piece has it pinned 
-            pinners = 0
-            pinner_square = (0,0)
-            for pinned_piece in self.pinned_piece_paths:
-                if start_square == pinned_piece.target_square:
-                    pinner_square = pinned_piece.start_square
-                    pinners+=1 #
-
-            if pinners == 1:
-                remove = True
-                for move in square_dict[start_square]:
-                    if move.target_square == pinner_square:
-                        remove = False
-                        break
-                if remove:
-                    remove_start_squares.append(start_square)
-
-                
-            if pinners == 2:
-                remove_start_squares.append(start_square)
-
-        for start_square in remove_start_squares:
-            del square_dict[start_square]
 
 
     def resetting_back_changed_castling_flags(self,recent_changed_castle_flags):
@@ -1024,21 +988,21 @@ class GameState:
         # print(self.current_color,"current",depth)
         self.start_new_round()
         self.filter_illegal_moves()
-        # self.order_moves()
+        self.order_moves()
 
 
         # if depth == 0 or self.no_moves():
         if depth==0:
-            # if self.no_moves() and self.human_player == self.current_color:
-            #     #return the largest -ve amount to acheive this outcome
-            #     return -100
-            # elif self.no_moves() and self.AI_player == self.current_color:
-            #     return 100
-            # print(self.white_positions,"whitreiessd")
+            if self.no_moves() and self.human_player == self.current_color:
+                #return the largest -ve amount to acheive this outcome
+                return -100
+            elif self.no_moves() and self.AI_player == self.current_color:
+                return 100
+            return self.evaluate()
             # a = self.check_for_captures(float("-inf"),float("inf"))
             # print("final eval score",a)
             # return self.check_for_captures(float("-inf"),float("inf"))
-            return self.enhanced_evaluate()
+            # return self.enhanced_evaluate()
 
         final_allowed_moves = copy.copy(self.final_allowed_moves)
         recent_changed_castle_flags = copy.copy(self.castle_flags)
@@ -1247,12 +1211,6 @@ class GameState:
 
     
 
-    def enhanced_evaluate(self):
-        """Replace your existing evaluate method with this"""
-        if not hasattr(self, 'evaluator'):
-            self.evaluator = EnhancedEvaluation()
-        return self.evaluator.evaluate(self)
-        
 
     def make_move(self,move,final_allowed_moves):
         was_removed = False
@@ -1312,7 +1270,7 @@ class GameState:
 
     def check_for_captures(self, alpha, beta):
         print(self.white_positions,"whiter")
-        score = self.enhanced_evaluate()
+        score = self.evaluate()
         print(self.white_positions,"whitesdsdr")
         if score >= beta:
             return beta
@@ -1388,6 +1346,41 @@ class GameState:
             scored_moves.append((score, move))
         scored_moves.sort(key=lambda x:x[0],reverse=True)
         self.final_allowed_moves = [move for  _,move in scored_moves]
+
+
+    def generate_random_number(self, seed = 1440):
+        seed ^= seed << 13
+        seed ^= seed >> 17
+        seed ^= seed << 5
+        return seed
+
+    def generate_piece_keys(self):
+        self.piece_keys = [[0 for _ in range(12)] for _ in range(64)]
+        for piece in range(12):
+            for square in range(64):
+                self.piece_keys[piece][square] = self.generate_random_number(seed = 1300 * (piece+1) * (square+1))
+
+    def generate_castling_keys(self):
+        self.castling_keys =  [0 for _ in range(4)]
+        for i in range(len(self.castling_keys)):
+            self.castling_keys[i] = self.generate_random_number(seed =1200 * i)
+
+    def generate_side_key(self):
+        self.black_side_key = self.generate_random_number(seed = 13001)
+
+    def compute_hash_key(self):
+        hash = 0
+        for row in range(8):
+            for col in range(8):
+                if self.board[row][col]:
+                    hash ^= self.piece_keys[self.board[row][col]][row*8 + col] 
+        hash ^= self.castling_keys
+
+
+
+
+
+    
 
 
 
