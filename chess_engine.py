@@ -32,7 +32,6 @@
 from piece import pieces
 from move import Move
 from square import squares
-from evaluation import EnhancedEvaluation
 import copy
 Square = squares()
 Piece = pieces()
@@ -58,8 +57,16 @@ class GameState:
         self.black_positions = [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7),(1,0),(1,1),(1,2),(1,3),(1,4),(1,5),(1,6),(1,7)]
         self.white_positions = [(6,0),(6,1),(6,2),(6,3),(6,4),(6,5),(6,6),(6,7),(7,0),(7,1),(7,2),(7,3),(7,4),(7,5),(7,6),(7,7)]
 
+        self.piece_keys = [[0 for _ in range(64)] for _ in range(12)]
+        self.castling_keys =  [0 for _ in range(4)]
+        self.black_side_key = 0
+        self.hash_dict = {}
+
         self.translate_fen_strings()
-        # self.distance_to_edge = {'n':0,'s':0,'e':0,'w':0, 'ne':0, 'nw':0, 'se':0, 'sw':0}
+        self.generate_piece_keys()
+        self.generate_castling_keys()
+        self.generate_side_key()
+
         self.distance_to_edge_white = {}
         self.distance_to_edge_black = {}
 
@@ -259,50 +266,7 @@ class GameState:
 
 
 
-    def start_new_round_minmax(self):
-        self.total_moves = {}
-        self.attack_squares = {}
-        self.pinned_piece_paths = []
-        self.checked_path = []
-        self.defended_squares = []
-        list_to_generate_moves_after_attackers_completed = []
-        if self.current_color == Piece.white:
-            self.attack_color = Piece.black
-            self.current_color = Piece.black
-            for row in range(8):
-                for col in range(8):
-                    if self.board[row][col] !=0:
-                        if Piece.is_color(self.board[row][col],Piece.black,True): 
-                            self.current_color = Piece.black
-                            self.move_generate(row,col, self.attack_squares)
-                        else:
-                            list_to_generate_moves_after_attackers_completed.append((row,col))
-                            # self.current_color = Piece.white
-                            # self.move_generate(row,col, self.total_moves, is_current_player=True)
-            self.attacker_defended_squares = copy.copy(self.defended_squares)                
-            self.current_color = Piece.white
-            for square in list_to_generate_moves_after_attackers_completed:
-                row,col = square
-                self.move_generate(row,col, self.total_moves, is_current_player=True)    
-        else:
-            self.attack_color = Piece.white
-            self.current_color = Piece.white
-            for row in range(8):
-                for col in range(8):
-                    if self.board[row][col] !=0:
-                        if Piece.is_color(self.board[row][col],Piece.white,True): 
-                            self.current_color = Piece.white
-                            self.move_generate(row,col, self.total_moves, is_current_player=True)
-                        else:
-                            list_to_generate_moves_after_attackers_completed.append((row,col))
-                            # self.current_color = Piece.black
-                            # self.move_generate(row,col, self.total_moves, is_current_player=True)
-            self.attacker_defended_squares = copy.copy(self.defended_squares)
-            self.current_color = Piece.black
-            for square in list_to_generate_moves_after_attackers_completed:
-                row,col = square
-                self.move_generate(row,col, self.total_moves, is_current_player=True)    
-
+ 
 
 
     def move_generate(self,start_square_row, start_square_col, square_dict, is_current_player=False, captures_only=False):  
@@ -985,24 +949,22 @@ class GameState:
 ########################MINMAX SECTION################################################
         
     def minmax(self, depth, is_maximising,alpha, beta):
-        # print(self.current_color,"current",depth)
+        hash = self.compute_hash_key()
+        if hash in self.hash_dict:
+            return self.hash_dict[hash]
         self.start_new_round()
         self.filter_illegal_moves()
         self.order_moves()
-
-
-        # if depth == 0 or self.no_moves():
+       
         if depth==0:
             if self.no_moves() and self.human_player == self.current_color:
                 #return the largest -ve amount to acheive this outcome
                 return -100
             elif self.no_moves() and self.AI_player == self.current_color:
                 return 100
-            return self.evaluate()
-            # a = self.check_for_captures(float("-inf"),float("inf"))
-            # print("final eval score",a)
-            # return self.check_for_captures(float("-inf"),float("inf"))
-            # return self.enhanced_evaluate()
+            self.hash_dict[hash] = self.evaluate()
+            return self.hash_dict[hash]
+           
 
         final_allowed_moves = copy.copy(self.final_allowed_moves)
         recent_changed_castle_flags = copy.copy(self.castle_flags)
@@ -1014,7 +976,6 @@ class GameState:
                 was_removed = False
                 target_row, target_col = move.target_square
                 start_row, start_col = move.start_square
-                # print(move.start_square,move.target_square,"is this empty alredy",self.board[self])
                 piece = self.board[start_row][start_col]
                 target_piece = self.board[target_row][target_col]
                 self.board[start_row][start_col] = 0
@@ -1137,7 +1098,7 @@ class GameState:
                 beta = min(beta, best_score)
                 if beta <= alpha:
                     break 
-
+        self.hash_dict[hash] = best_score            
         return best_score
 
 
@@ -1335,7 +1296,7 @@ class GameState:
                 move_score -= (7 - (target_piece - piece))
             
             #try to move the 
-            if Piece.is_type(self.baord[s_row][s_col], Piece.king):
+            if Piece.is_type(self.board[s_row][s_col], Piece.king):
                 move_score -= 10
         return move_score
 
@@ -1355,7 +1316,6 @@ class GameState:
         return seed
 
     def generate_piece_keys(self):
-        self.piece_keys = [[0 for _ in range(12)] for _ in range(64)]
         for piece in range(12):
             for square in range(64):
                 self.piece_keys[piece][square] = self.generate_random_number(seed = 1300 * (piece+1) * (square+1))
@@ -1372,15 +1332,51 @@ class GameState:
         hash = 0
         for row in range(8):
             for col in range(8):
-                if self.board[row][col]:
-                    hash ^= self.piece_keys[self.board[row][col]][row*8 + col] 
-        hash ^= self.castling_keys
+                if Piece.is_type(self.board[row][col],Piece.bishop) and Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[0][row*8 + col] 
+                if Piece.is_type(self.board[row][col],Piece.queen) and Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[1][row*8 + col] 
+                if Piece.is_type(self.board[row][col],Piece.king) and Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[2][row*8 + col] 
+                if Piece.is_type(self.board[row][col],Piece.knight) and Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[3][row*8 + col] 
+                if Piece.is_type(self.board[row][col],Piece.rook) and Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[4][row*8 + col] 
+                if Piece.is_type(self.board[row][col],Piece.pawn) and Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[5][row*8 + col] 
 
+                if Piece.is_type(self.board[row][col],Piece.bishop) and not Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[6][row*8 + col] 
+                if Piece.is_type(self.board[row][col],Piece.queen) and not Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[7][row*8 + col] 
+                if Piece.is_type(self.board[row][col],Piece.king) and not Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[8][row*8 + col] 
+                if Piece.is_type(self.board[row][col],Piece.knight) and not Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[9][row*8 + col] 
+                if Piece.is_type(self.board[row][col],Piece.rook) and not Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[10][row*8 + col] 
+                if Piece.is_type(self.board[row][col],Piece.pawn) and not Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[11][row*8 + col] 
 
+        if not self.castle_flags['BrookRMove'] and not self.castle_flags['BkingMove']:
+            hash ^= self.castling_keys[0]
 
+        if not self.castle_flags['BrookLMove'] and not self.castle_flags['BkingMove']:
+            hash ^= self.castling_keys[1]
 
+        if not self.castle_flags['WrookLMove'] and not self.castle_flags['WkingMove']:
+            hash ^= self.castling_keys[2]
 
+        if not self.castle_flags['WrookRMove'] and not self.castle_flags['WkingMove']:
+            hash ^= self.castling_keys[3]
+        
+        if self.current_color == Piece.black:
+            hash ^=  self.black_side_key
+
+        return hash
     
+    
+
 
 
 
