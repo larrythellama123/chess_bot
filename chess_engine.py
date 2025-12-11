@@ -998,6 +998,7 @@ class GameState:
                 return -100
             elif self.no_moves() and self.AI_player == self.current_color:
                 return 100
+            self.check_for_captures()
             self.hash_dict[hash] = self.evaluate()
             return self.hash_dict[hash]
            
@@ -1344,4 +1345,33 @@ class GameState:
             hash ^=  self.black_side_key
 
         return hash
+
+
+class MCTS:
+    def __init__(self, cnn, simulations):
+        self.cnn = cnn
+        self.simualtions = simulations
+
+    def search(self, board):
+        score = 0
+        for _ in range(self.simulations):
+            node = self.select_node(board)
+            score = self.simulate(node)
+            self.backprop(score)
+
+        return self.get_best_move()
+    
+    def select_node():
+        #use UCB
+        pass
+
+    def simulate():
+        #eval with CNNs
+        pass
+
+    def backprop(self):
+        pass
+
+    def get_best_move(self):
+        pass
 
