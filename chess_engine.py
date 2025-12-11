@@ -64,6 +64,16 @@ class GameState:
         self.hash_dict = defaultdict(int)
 
         self.translate_fen_strings()
+        self.knight_offsets = {'te':(2,1),'tw':(2,-1),'be':(-2,1),'bw':(-2,-1),'htw':(1,2),'hte':(1,-2),'hbe':(-1,2),'hbw':(-1,-2)}
+        self.knight_positions = {'LWK':(7,1),'RWK':(7,6),'LBK':(0,1),'RBK':(0,6)}
+        self.knight_moves_dict = {}
+        self.generate_knight_moves(0,1,self.knight_moves_dict)
+        self.generate_knight_moves(0,6,self.knight_moves_dict)
+        self.generate_knight_moves(7,1,self.knight_moves_dict)
+        self.generate_knight_moves(7,6,self.knight_moves_dict)
+
+
+
         self.generate_piece_keys()
         self.generate_castling_keys()
         self.generate_side_key()
@@ -71,9 +81,7 @@ class GameState:
         self.distance_to_edge_white = {}
         self.distance_to_edge_black = {}
 
-        self.knight_offsets = {'te':(2,1),'tw':(2,-1),'be':(-2,1),'bw':(-2,-1),'htw':(1,2),'hte':(1,-2),'hbe':(-1,2),'hbw':(-1,-2)}
-        self.knight_positions = {'LWK':(7,1),'RWK':(7,6),'LBK':(0,1),'RBK':(0,6)}
-        self.knight_moves_dict = {}
+        
 
         self.defended_squares = []
         self.attacker_defended_squares = []
@@ -261,6 +269,21 @@ class GameState:
                 start_square_row, start_square_col = position
                 self.move_generate(start_square_row,start_square_col, self.total_moves,is_current_player=True)
 
+
+    def loop_board_opp(self, color, dict):
+        for row in range(8):
+            for col in range(8):
+                if Piece.is_color(self.board[row][col],color):
+                    start_square_row, start_square_col = row, col
+                    self.move_generate(start_square_row,start_square_col, dict)
+
+    def loop_board_normal(self, color, dict):
+        for row in range(8):
+            for col in range(8):
+                if Piece.is_color(self.board[row][col],color):
+                    start_square_row, start_square_col = row, col
+                    self.move_generate(start_square_row,start_square_col, dict, is_current_player=True)
+
     def start_new_round_minmax(self,captures_only=False):
         self.total_moves = {}
         self.attack_squares = {}
@@ -270,37 +293,20 @@ class GameState:
         if self.current_color == Piece.white:
             self.attack_color = Piece.black
             self.current_color = Piece.black
-            for row in range(8):
-                for col in range(8):
-                    if Piece.is_color(self.board[row][col],Piece.black):
-                        start_square_row, start_square_col = row, col
-                        self.move_generate(start_square_row,start_square_col, self.attack_squares)
+            self.loop_board_opp(Piece.black, self.attack_squares)
             self.attacker_defended_squares = copy.copy(self.defended_squares)
             self.current_color = Piece.white
             self.captures_moves_only = {}
-            for row in range(8):
-                for col in range(8):
-                    if Piece.is_color(self.board[row][col],Piece.white):
-                        start_square_row, start_square_col = row, col
-                        self.move_generate(start_square_row,start_square_col, self.attack_squares)
-                start_square_row, start_square_col = row, col
-                self.move_generate(start_square_row,start_square_col, self.total_moves, is_current_player=True)
+            self.loop_board_normal(Piece.white, self.total_moves)
         else:
             self.attack_color = Piece.white
             self.current_color = Piece.white
-            for row in range(8):
-                for col in range(8):
-                    if Piece.is_color(self.board[row][col],Piece.white):
-                        start_square_row, start_square_col = row, col
-                        self.move_generate(start_square_row,start_square_col, self.attack_squares)
+            self.loop_board_opp(Piece.white, self.attack_squares)
             self.attacker_defended_squares = copy.copy(self.defended_squares)
             self.captures_moves_only = {}
             self.current_color = Piece.black
-            for row in range(8):
-                for col in range(8):
-                    if Piece.is_color(self.board[row][col],Piece.black):
-                        start_square_row, start_square_col = row, col
-                        self.move_generate(start_square_row,start_square_col, self.total_moves,is_current_player=True)
+            self.loop_board_normal(Piece.black, self.total_moves)
+          
 
 
 
@@ -326,7 +332,6 @@ class GameState:
             self.generate_pawn_moves(start_square_row, start_square_col, square_dict)
 
         if Piece.is_type(self.board[start_square_row][start_square_col],Piece.knight):
-            self.generate_knight_moves(start_square_row,start_square_col,self.knight_moves_dict)
             self.add_knight_squares(square_dict, start_square_row, start_square_col)
 
 
@@ -356,14 +361,8 @@ class GameState:
         square_dict[(start_square_row,start_square_col)] = []
         self.captures_moves_only[(start_square_row,start_square_col)] = []
         for distance_index in limit:
-            # if break_flag == True:
-            #     break_flag = False
-            #     continue
             moves = []
             pinned_piece = False
-            # print(f"distance index: {distance_index}")
-            # print(f"length:{distance_to_edge[(start_square_row,start_square_col)][distance_index]}")
-            # print(f"start_sq_row:{start_square_row}, start_sq_col:{start_square_col}")
             square_row = start_square_row
             square_col = start_square_col
             is_extended_already = False
@@ -984,7 +983,7 @@ class GameState:
 
 
 ########################MINMAX SECTION################################################
-        
+    
     def minmax(self, depth, is_maximising,alpha, beta):
         hash = self.compute_hash_key()
         if self.hash_dict[hash] != 0:
@@ -1345,16 +1344,4 @@ class GameState:
             hash ^=  self.black_side_key
 
         return hash
-    
-    
 
-
-
-
-
-                
-
-            
-            
-            
-            
