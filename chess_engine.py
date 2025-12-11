@@ -34,6 +34,8 @@ from move import Move
 from square import squares
 import copy
 from collections import defaultdict
+import math
+
 Square = squares()
 Piece = pieces()
 class GameState:
@@ -1361,15 +1363,39 @@ class MCTS:
 
         return self.get_best_move()
     
-    def select_node():
+    def select_node(self, board):
+        parent_hash =  self.compute_hash_key(self.board)
+        self.start_new_round()
+        for move in self.final_allowed_moves:
+            start_row, start_col = move.start_square
+            target_row, target_col = move.target_square
+
+            self.board[target_row][target_col] = self.board[start_row][start_col]
+            self.board[start_row][start_col] = 0
+            # implement check for castle move being made, make caslte move be made instead if that is the case
+
+            hash = self.compute_hash_key(self.board)
+            self.hash_dict[hash] += 1
+
+            self.board[start_row][start_col] = self.board[target_row][target_col]
+            self.board[target_row][target_col] = 0
+            # implement check to unmake any castle moves
+
+            UCB = self.avergae_value_hash_dict[hash] + math.sqrt(2) + math.sqrt(math.log(self.hash_dict[parent_hash])/self.hash_dict[hash])
+
+            UCB_hash_dict[hash]  = hash
+             
         #use UCB
+        #UCB = vi(avergae reward from this node)+ sqrt(2)*sqrt(ln Np (number of times the parent node was viisted)/Ni (number of the times the child node has been visited))
         pass
 
-    def simulate():
+    def simulate(self, node):
         #eval with CNNs
-        pass
+        score = self.cnn.predict(node)
+        return score
 
     def backprop(self):
+
         pass
 
     def get_best_move(self):
