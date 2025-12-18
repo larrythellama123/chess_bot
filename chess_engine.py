@@ -1000,7 +1000,7 @@ class GameState:
                 return -100
             elif self.no_moves() and self.AI_player == self.current_color:
                 return 100
-            self.check_for_captures()
+            # self.check_for_captures()
             self.hash_dict[hash] = self.evaluate()
             return self.hash_dict[hash]
            
@@ -1400,4 +1400,3 @@ class MCTS:
 
     def get_best_move(self):
         pass
-
