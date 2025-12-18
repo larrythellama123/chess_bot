@@ -34,10 +34,12 @@ from move import Move
 from square import squares
 import copy
 from collections import defaultdict
+from evaluation import EnhancedEvaluation
 import math
 
 Square = squares()
 Piece = pieces()
+enhancedEvaluation = EnhancedEvaluation()
 class GameState:
 
     def __init__(self):
@@ -1001,7 +1003,7 @@ class GameState:
             elif self.no_moves() and self.AI_player == self.current_color:
                 return 100
             # self.check_for_captures()
-            self.hash_dict[hash] = self.evaluate()
+            self.hash_dict[hash] = enhancedEvaluation.evaluate(self.board, self.white_positions, self.black_positions, self.current_color)
             return self.hash_dict[hash]
            
 
@@ -1021,8 +1023,6 @@ class GameState:
 
                 
                 self.check_if_rook_king_moved(start_row,start_col)
-
-
                 self.change_current_color()
                 score = self.minmax(depth-1, False,alpha,beta)
                 self.change_current_color()

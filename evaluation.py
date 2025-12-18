@@ -134,7 +134,7 @@ class EnhancedEvaluation:
             'king_endgame': king_endgame_table
         }
 
-    def evaluate(self, game_state):
+    def evaluate(self, board, white_positions, black_positions, current_color):
         """
         Main evaluation function - returns score from current player's perspective
         """
@@ -143,40 +143,40 @@ class EnhancedEvaluation:
         black_eval = EvaluationData()
         
         # Get material information
-        white_material = self.get_material_info(game_state, Piece.white)
-        black_material = self.get_material_info(game_state, Piece.black)
+        white_material = self.get_material_info(board, white_positions, black_positions, Piece.white)
+        black_material = self.get_material_info(board, white_positions, black_positions, Piece.black)
         
         # Material evaluation
         white_eval.material_score = white_material.material_score
         black_eval.material_score = black_material.material_score
         
         # Positional evaluation
-        white_eval.piece_square_score = self.evaluate_piece_square_tables(game_state, True, black_material.endgame_t)
-        black_eval.piece_square_score = self.evaluate_piece_square_tables(game_state, False, white_material.endgame_t)
+        white_eval.piece_square_score = self.evaluate_piece_square_tables(board, white_positions, black_positions, True, black_material.endgame_t)
+        black_eval.piece_square_score = self.evaluate_piece_square_tables(board, white_positions, black_positions, False, white_material.endgame_t)
 
         
         # Mop-up evaluation (push enemy king to edge in winning endgames)
-        white_eval.mop_up_score = self.mop_up_eval(game_state, True, white_material, black_material)
-        black_eval.mop_up_score = self.mop_up_eval(game_state, False, black_material, white_material)
+        white_eval.mop_up_score = self.mop_up_eval(board, white_positions, black_positions, True, white_material, black_material)
+        black_eval.mop_up_score = self.mop_up_eval(board, white_positions, black_positions, False, black_material, white_material)
         
         # Pawn structure evaluation
-        white_eval.pawn_score = self.evaluate_pawns(game_state, Piece.white)
-        black_eval.pawn_score = self.evaluate_pawns(game_state, Piece.black)
+        white_eval.pawn_score = self.evaluate_pawns(board, white_positions, black_positions, Piece.white)
+        black_eval.pawn_score = self.evaluate_pawns(board, white_positions, black_positions, Piece.black)
         
         # King safety evaluation
-        white_eval.pawn_shield_score = self.king_pawn_shield(game_state, Piece.white, black_material)
-        black_eval.pawn_shield_score = self.king_pawn_shield(game_state, Piece.black, white_material)
+        white_eval.pawn_shield_score = self.king_pawn_shield(board, white_positions, black_positions, Piece.white, black_material)
+        black_eval.pawn_shield_score = self.king_pawn_shield(board, white_positions, black_positions, Piece.black, white_material)
 
-        white_eval.king_safety = self.evaluate_king_safety(game_state)
-        black_eval.king_safety = self.evaluate_king_safety(game_state)
+        white_eval.king_safety = self.evaluate_king_safety(board, white_positions, black_positions)
+        black_eval.king_safety = self.evaluate_king_safety(board, white_positions, black_positions)
         
         # Calculate final evaluation
-        perspective = 1 if game_state.current_color == Piece.white else -1
+        perspective = 1 if current_color == Piece.white else -1
         eval_score = white_eval.sum() - black_eval.sum()
         
         return eval_score * perspective
 
-    def get_material_info(self, game_state, color):
+    def get_material_info(self,board, white_positions, black_positions, color):
         """Calculate material information for a given color"""
         num_pawns = 0
         num_knights = 0
@@ -184,10 +184,10 @@ class EnhancedEvaluation:
         num_rooks = 0
         num_queens = 0
         
-        positions = game_state.white_positions if color == Piece.white else game_state.black_positions
+        positions = white_positions if color == Piece.white else black_positions
         
         for row, col in positions:
-            piece = game_state.board[row][col]
+            piece = board[row][col]
             if Piece.is_type(piece, Piece.pawn):
                 num_pawns += 1
             elif Piece.is_type(piece, Piece.knight):
@@ -201,13 +201,13 @@ class EnhancedEvaluation:
         
         return MaterialInfo(num_pawns, num_knights, num_bishops, num_queens, num_rooks)
 
-    def evaluate_piece_square_tables(self, game_state, is_white, endgame_t):
+    def evaluate_piece_square_tables(self, board, white_positions, black_positions, is_white, endgame_t):
         """Evaluate pieces based on their positions using piece-square tables"""
         value = 0
-        positions = game_state.white_positions if is_white else game_state.black_positions
+        positions = white_positions if is_white else black_positions
         
         for row, col in positions:
-            piece = game_state.board[row][col]
+            piece = board[row][col]
             
             if Piece.is_type(piece, Piece.pawn):
                 # Interpolate between early and endgame pawn tables
@@ -236,7 +236,7 @@ class EnhancedEvaluation:
         actual_row = row if is_white else 7 - row
         return table[actual_row][col]
 
-    def mop_up_eval(self, game_state, is_white, my_material, enemy_material):
+    def mop_up_eval(self, board, white_positions, black_positions, is_white, my_material, enemy_material):
         """Encourage king activity and enemy king edge-pushing in winning endgames"""
         if my_material.material_score > enemy_material.material_score + self.PAWN_VALUE * 2 and enemy_material.endgame_t > 0:
             mop_up_score = 0
@@ -245,16 +245,16 @@ class EnhancedEvaluation:
             my_king_pos = None
             enemy_king_pos = None
             
-            my_positions = game_state.white_positions if is_white else game_state.black_positions
-            enemy_positions = game_state.black_positions if is_white else game_state.white_positions
+            my_positions = white_positions if is_white else black_positions
+            enemy_positions = black_positions if is_white else white_positions
             
             for row, col in my_positions:
-                if Piece.is_type(game_state.board[row][col], Piece.king):
+                if Piece.is_type(board[row][col], Piece.king):
                     my_king_pos = (row, col)
                     break
             
             for row, col in enemy_positions:
-                if Piece.is_type(game_state.board[row][col], Piece.king):
+                if Piece.is_type(board[row][col], Piece.king):
                     enemy_king_pos = (row, col)
                     break
             
@@ -272,26 +272,26 @@ class EnhancedEvaluation:
         
         return 0
 
-    def evaluate_pawns(self, game_state, color):
+    def evaluate_pawns(self,board, white_positions, black_positions, color):
         """Evaluate pawn structure (passed pawns, isolated pawns)"""
         bonus = 0
         num_isolated_pawns = 0
         
-        positions = game_state.white_positions if color == Piece.white else game_state.black_positions
-        enemy_positions = game_state.black_positions if color == Piece.white else game_state.white_positions
+        positions = white_positions if color == Piece.white else black_positions
+        enemy_positions = black_positions if color == Piece.white else white_positions
         
         # Get pawn positions by file
         pawn_files = {}
         enemy_pawn_files = {}
         
         for row, col in positions:
-            if Piece.is_type(game_state.board[row][col], Piece.pawn):
+            if Piece.is_type(board[row][col], Piece.pawn):
                 if col not in pawn_files:
                     pawn_files[col] = []
                 pawn_files[col].append(row)
         
         for row, col in enemy_positions:
-            if Piece.is_type(game_state.board[row][col], Piece.pawn):
+            if Piece.is_type(board[row][col], Piece.pawn):
                 if col not in enemy_pawn_files:
                     enemy_pawn_files[col] = []
                 enemy_pawn_files[col].append(row)
@@ -337,7 +337,7 @@ class EnhancedEvaluation:
         
         return bonus
 
-    def king_pawn_shield(self, game_state, color, enemy_material):
+    def king_pawn_shield(self, board, white_positions, black_positions, color, enemy_material):
         """Evaluate king safety based on pawn shield"""
         if enemy_material.endgame_t >= 1:
             return 0
@@ -347,10 +347,10 @@ class EnhancedEvaluation:
         
         # Find king position
         king_pos = None
-        positions = game_state.white_positions if is_white else game_state.black_positions
+        positions = white_positions if is_white else black_positions
         
         for row, col in positions:
-            if Piece.is_type(game_state.board[row][col], Piece.king):
+            if Piece.is_type(board[row][col], Piece.king):
                 king_pos = (row, col)
                 break
         
@@ -369,7 +369,7 @@ class EnhancedEvaluation:
             
             for i, (shield_row, shield_col) in enumerate(shield_squares):
                 if 0 <= shield_row < 8 and 0 <= shield_col < 8:
-                    piece = game_state.board[shield_row][shield_col]
+                    piece = board[shield_row][shield_col]
                     expected_pawn = color|Piece.pawn                    
                     if piece != expected_pawn:
                         if i < len(self.king_pawn_shield_scores):
@@ -385,7 +385,7 @@ class EnhancedEvaluation:
         
         return int(-penalty * pawn_shield_weight)
     
-    def evaluate_king_safety(self,game_state):
+    def evaluate_king_safety(self,board, white_positions, black_positions):
         """Evaluate king safety based on pawn shield and piece proximity"""
         points = 0
 
@@ -393,25 +393,25 @@ class EnhancedEvaluation:
         white_king_pos = None
         black_king_pos = None
 
-        for row, col in game_state.white_positions:
-            if Piece.is_type(game_state.board[row][col], Piece.king):
+        for row, col in white_positions:
+            if Piece.is_type(board[row][col], Piece.king):
                 white_king_pos = (row, col)
                 break
 
-        for row, col in game_state.black_positions:
-            if Piece.is_type(game_state.board[row][col], Piece.king):
+        for row, col in black_positions:
+            if Piece.is_type(board[row][col], Piece.king):
                 black_king_pos = (row, col)
                 break
 
         if white_king_pos:
-            points += self.evaluate_single_king_safety(white_king_pos, Piece.white,game_state)
+            points += self.evaluate_single_king_safety(white_king_pos, Piece.white,board)
 
         if black_king_pos:
-            points += self.evaluate_single_king_safety(black_king_pos, Piece.black,game_state)
+            points += self.evaluate_single_king_safety(black_king_pos, Piece.black,board)
 
         return points
 
-    def evaluate_single_king_safety(self, king_pos, color, game_state):
+    def evaluate_single_king_safety(self,  king_pos, color,board):
         """Evaluate safety for a single king"""
         king_row, king_col = king_pos
         safety_score = 0
@@ -422,7 +422,7 @@ class EnhancedEvaluation:
             shield_positions = [(king_row-1, king_col-1), (king_row-1, king_col), (king_row-1, king_col+1)]
             for shield_row, shield_col in shield_positions:
                 if 0 <= shield_row < 8 and 0 <= shield_col < 8:
-                    piece = game_state.board[shield_row][shield_col]
+                    piece = board[shield_row][shield_col]
                     if Piece.is_type(piece, Piece.pawn) and Piece.is_color(piece, Piece.white, True):
                         safety_score += 0.5
         else:
@@ -430,7 +430,7 @@ class EnhancedEvaluation:
             shield_positions = [(king_row+1, king_col-1), (king_row+1, king_col), (king_row+1, king_col+1)]
             for shield_row, shield_col in shield_positions:
                 if 0 <= shield_row < 8 and 0 <= shield_col < 8:
-                    piece = game_state.board[shield_row][shield_col]
+                    piece = board[shield_row][shield_col]
                     if Piece.is_type(piece, Piece.pawn) and Piece.is_color(piece, Piece.black, True):
                         safety_score += 0.5
 
