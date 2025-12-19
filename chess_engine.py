@@ -498,6 +498,30 @@ class GameState:
             if self.current_color != self.attack_color:
                 square_dict[(square_row,square_col)].append(move)
 
+    def pawn_attack_moves(self, start_square_row, start_square_col, square_row, square_col,move, square_dict):
+        if (square_row<8 and square_row > -1 and square_col<8 and square_col >-1):
+
+            #attacker squares added regardless
+            if self.current_color == self.attack_color:
+                #this will then be passed to the attacker defended squares list
+                if Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],True):
+                    self.defended_squares.append((square_row,square_col))
+
+                move.target_square = (square_row, square_col)
+                square_dict[(start_square_row,start_square_col)].append(move)
+
+                if Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],False):
+                    if Piece.is_type(self.board[square_row][square_col],Piece.king):
+                        self.checked_path.append(move)
+        
+            #for actual player
+            elif Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],False):
+                move.target_square = (square_row, square_col)
+                square_dict[(start_square_row,start_square_col)].append(move)
+                if Piece.is_type(self.board[square_row][square_col],Piece.king):
+                    self.checked_path.append(move)
+                self.captures_moves_only[(start_square_row,start_square_col)].append(move)
+
 
 
     def generate_pawn_moves(self,square_row, square_col, square_dict):
@@ -526,22 +550,7 @@ class GameState:
             move.start_square = (square_row, square_col)
             square_row -= 1
             square_col += 1
-            if (square_row<8 and square_row > -1 and square_col<8 and square_col >-1):
-                if self.current_color == self.attack_color:
-                    move.target_square = (square_row, square_col)
-                    square_dict[(start_square_row,start_square_col)].append(move)
-                elif self.current_color == self.attack_color or Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],False):
-                    move.target_square = (square_row, square_col)
-                    square_dict[(start_square_row,start_square_col)].append(move)
-                    if Piece.is_type(self.board[square_row][square_col],Piece.king):
-                        self.checked_path.append(move)
-                    self.captures_moves_only[(start_square_row,start_square_col)].append(move)
-                elif Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],True):
-                    self.defended_squares.append((square_row,square_col))
-
-        
-
-
+            self.pawn_attack_moves(start_square_row, start_square_col, square_row, square_col,move,square_dict)
             square_row += 1
             square_col -= 1
 
@@ -550,18 +559,8 @@ class GameState:
             move.start_square = (square_row, square_col)
             square_row -= 1
             square_col -= 1
-            if (square_row<8 and square_row > -1 and square_col<8 and square_col >-1):
-                if self.current_color == self.attack_color:
-                    move.target_square = (square_row, square_col)
-                    square_dict[(start_square_row,start_square_col)].append(move)
-                elif self.current_color == self.attack_color or Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],False):
-                    move.target_square = (square_row, square_col)
-                    square_dict[(start_square_row,start_square_col)].append(move)
-                    if Piece.is_type(self.board[square_row][square_col],Piece.king):
-                        self.checked_path.append(move)
-                    self.captures_moves_only[(start_square_row,start_square_col)].append(move)
-                elif Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],True):
-                    self.defended_squares.append((square_row,square_col))
+            self.pawn_attack_moves(start_square_row, start_square_col, square_row, square_col,move,square_dict)
+           
         else:
             if (square_row,square_col) in Square.black_pawn_original_location:
                 self.move_pawn_two_spaces(square_row,square_col,square_dict,2)
@@ -579,18 +578,7 @@ class GameState:
             move.start_square = (square_row, square_col)
             square_row += 1
             square_col += 1
-            if (square_row<8 and square_row > -1 and square_col<8 and square_col >-1):
-                if self.current_color == self.attack_color:
-                    move.target_square = (square_row, square_col)
-                    square_dict[(start_square_row,start_square_col)].append(move)
-                elif Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],False):
-                    move.target_square = (square_row, square_col)
-                    square_dict[(start_square_row,start_square_col)].append(move)
-                    if Piece.is_type(self.board[square_row][square_col],Piece.king):
-                        self.checked_path.append(move)
-                    self.captures_moves_only[(start_square_row,start_square_col)].append(move)
-                elif Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],True):
-                    self.defended_squares.append((square_row,square_col))
+            self.pawn_attack_moves(start_square_row, start_square_col, square_row, square_col,move,square_dict)
             square_row -= 1
             square_col -= 1
 
@@ -599,18 +587,7 @@ class GameState:
             move.start_square = (square_row, square_col)
             square_row += 1
             square_col -= 1
-            if (square_row<8 and square_row > -1 and square_col<8 and square_col >-1):
-                if self.current_color == self.attack_color:
-                    move.target_square = (square_row, square_col)
-                    square_dict[(start_square_row,start_square_col)].append(move)
-                elif Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],False):
-                    move.target_square = (square_row, square_col)
-                    square_dict[(start_square_row,start_square_col)].append(move)
-                    if Piece.is_type(self.board[square_row][square_col],Piece.king):
-                        self.checked_path.append(move)
-                    self.captures_moves_only[(start_square_row,start_square_col)].append(move)
-                elif Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],True):
-                    self.defended_squares.append((square_row,square_col))
+            self.pawn_attack_moves(start_square_row, start_square_col, square_row, square_col,move,square_dict)
             
         
                 
