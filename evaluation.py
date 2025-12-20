@@ -159,16 +159,16 @@ class EnhancedEvaluation:
         white_eval.mop_up_score = self.mop_up_eval(board, white_positions, black_positions, True, white_material, black_material)
         black_eval.mop_up_score = self.mop_up_eval(board, white_positions, black_positions, False, black_material, white_material)
         
-        # Pawn structure evaluation
-        white_eval.pawn_score = self.evaluate_pawns(board, white_positions, black_positions, Piece.white)
-        black_eval.pawn_score = self.evaluate_pawns(board, white_positions, black_positions, Piece.black)
+        # # Pawn structure evaluation
+        # white_eval.pawn_score = self.evaluate_pawns(board, white_positions, black_positions, Piece.white)
+        # black_eval.pawn_score = self.evaluate_pawns(board, white_positions, black_positions, Piece.black)
         
-        # King safety evaluation
-        white_eval.pawn_shield_score = self.king_pawn_shield(board, white_positions, black_positions, Piece.white, black_material)
-        black_eval.pawn_shield_score = self.king_pawn_shield(board, white_positions, black_positions, Piece.black, white_material)
+        # # King safety evaluation
+        # white_eval.pawn_shield_score = self.king_pawn_shield(board, white_positions, black_positions, Piece.white, black_material)
+        # black_eval.pawn_shield_score = self.king_pawn_shield(board, white_positions, black_positions, Piece.black, white_material)
 
-        white_eval.king_safety = self.evaluate_king_safety(board, white_positions, black_positions)
-        black_eval.king_safety = self.evaluate_king_safety(board, white_positions, black_positions)
+        # white_eval.king_safety = self.evaluate_king_safety(board, white_positions, black_positions)
+        # black_eval.king_safety = self.evaluate_king_safety(board, white_positions, black_positions)
         
         # Calculate final evaluation
         perspective = 1 if current_color == Piece.white else -1
@@ -443,7 +443,6 @@ class EnhancedEvaluation:
 
 
 class EvaluationData:
-    """Container for evaluation components"""
     def __init__(self):
         self.material_score = 0
         self.mop_up_score = 0

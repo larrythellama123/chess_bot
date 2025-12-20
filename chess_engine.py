@@ -40,6 +40,15 @@ import math
 Square = squares()
 Piece = pieces()
 enhancedEvaluation = EnhancedEvaluation()
+
+class FixedSizeList(list):
+    max_size = 200
+    size = 0
+    def append(self, item):
+        if self.size<200:
+            super().append(item)
+
+
 class GameState:
 
     def __init__(self):
@@ -48,7 +57,7 @@ class GameState:
         
         self.board = [[0 for j in range(8)] for i in range(8)]
         #experimental
-        self.final_allowed_moves = [] 
+        self.final_allowed_moves = FixedSizeList()
         self.total_moves = {}
         self.attack_squares = {}
         self.temp_attack_squares = {}
@@ -506,6 +515,7 @@ class GameState:
                 #this will then be passed to the attacker defended squares list
                 if Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],True):
                     self.defended_squares.append((square_row,square_col))
+                    return
 
                 move.target_square = (square_row, square_col)
                 square_dict[(start_square_row,start_square_col)].append(move)
@@ -538,7 +548,7 @@ class GameState:
                 move = Move()
                 move.start_square = (square_row, square_col)
                 square_row -= 1 
-                if self.board[square_row][square_col]==0:
+                if (square_row > -1) and self.board[square_row][square_col]==0:
                     move.target_square = (square_row, square_col)
                     if self.current_color != self.attack_color:
                         square_dict[(start_square_row,start_square_col)].append(move)
@@ -568,7 +578,7 @@ class GameState:
                 move = Move()
                 move.start_square = (square_row, square_col)
                 square_row += 1 
-                if self.board[square_row][square_col]==0:
+                if (square_row < 8) and self.board[square_row][square_col]==0:
                     move.target_square = (square_row, square_col)
                     square_dict[(start_square_row,start_square_col)].append(move)
                 square_row -= 1
@@ -667,6 +677,8 @@ class GameState:
                 continue
             if Piece.is_color(self.board[king_row][king_col], self.board[initial_king_row][initial_king_col], False) and self.board[king_row][king_col]!=0:
                 self.captures_moves_only[(initial_king_row,initial_king_col)].append(move)
+            print(move.start_square,"HERE",move.target_square)
+            
             square_dict[(initial_king_row,initial_king_col)].append(move)
             
     
@@ -760,10 +772,8 @@ class GameState:
             row,col = start_square
             remove_list = []
             if Piece.is_type(self.board[row][col], Piece.king) and Piece.is_color(self.board[row][col],self.current_color):
-                #should not rmeove while iterating
                 for move in square_dict[start_square]:
                     for square in attack_squares:
-                       
                         if move.target_square == square.target_square:
                             print("king moves to put it in check",move.start_square,move.target_square)
                             s_row, s_col = square.start_square
@@ -772,13 +782,13 @@ class GameState:
                             break
 
                     for square in self.attacker_defended_squares:
-                        if move.target_square == square:
+                         if move.target_square == square:
                             print("king moves to put it in check",move.start_square,move.target_square)
                             s_row, s_col = square
                             print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
-                            if move not in remove_list:
-                                remove_list.append(move)
+                            remove_list.append(move)
                             break
+                        
 
                 for move in remove_list:
                     square_dict[start_square].remove(move)
@@ -971,7 +981,7 @@ class GameState:
             return self.hash_dict[hash]
         self.start_new_round_minmax()
         self.filter_illegal_moves()
-        # self.order_moves()
+        self.order_moves()
        
         if depth==0:
             if self.no_moves() and self.human_player == self.current_color:
@@ -983,8 +993,8 @@ class GameState:
             self.hash_dict[hash] = enhancedEvaluation.evaluate(self.board, self.white_positions, self.black_positions, self.current_color)
             return self.hash_dict[hash]
            
-
-        final_allowed_moves = copy.copy(self.final_allowed_moves)
+        
+        final_allowed_moves = self.final_allowed_moves
         recent_changed_castle_flags = copy.copy(self.castle_flags)
         pawn_to_knight = False
         pawn_to_queen = False
@@ -1227,27 +1237,28 @@ class GameState:
         
 
     def score_move(self):
+        capturedPieceValueMultiplier = 10
+        squareControlledByOpponentPawnPenalty = 350
         for move in self.final_allowed_moves:
             move_score = 0
             s_row,s_col = move.start_square
             t_row,t_col = move.target_square
-            piece = self.board[s_row][s_col]
+            move_piece = self.board[s_row][s_col]
             target_piece = self.board[t_row][t_col]
-            #check if the target piece is valuable and current piece is dispensable
-            move_score += target_piece*4 - piece*4
+
+            if target_piece==0:
+                move_score = capturedPieceValueMultiplier * GetPieceValue (target_piece) - GetPieceValue (move_piece)
+
 
             #check if it results in pawn promotion
-            if t_row==7 or t_row == 0 and Piece.is_type(piece,Piece.pawn):
-                move_score += 10
+            if t_row==7 or t_row == 0 and Piece.is_type(move_piece,Piece.pawn):
+                move_score += enhancedEvaluation.QUEEN_VALUE
 
             #penalize for moving to an attacked sqaure
             if move.target_square in self.attack_squares or move.target_square in self.attacker_defended_squares:
                 #grade by the value of the piece
-                move_score -= (7 - (target_piece - piece))
+                move_score -= squareControlledByOpponentPawnPenalty 
             
-            #try to move the 
-            if Piece.is_type(self.board[s_row][s_col], Piece.king):
-                move_score -= 10
         return move_score
 
     def order_moves(self):
@@ -1324,6 +1335,24 @@ class GameState:
             hash ^=  self.black_side_key
 
         return hash
+    
+
+def GetPieceValue (pieceType):
+    match (pieceType):
+        case Piece.queen:
+            return enhancedEvaluation.QUEEN_VALUE
+        case Piece.rook:
+            return enhancedEvaluation.ROOK_VALUE
+        case Piece.knight:
+            return enhancedEvaluation.KNIGHT_VALUE
+        case Piece.bishop:
+            return enhancedEvaluation.BISHOP_VALUE
+        case Piece.pawn:
+            return enhancedEvaluation.PAWN_VALUE
+        case _:
+            return 0
+    
+
 
 
 class MCTS:
