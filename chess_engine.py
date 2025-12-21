@@ -42,22 +42,25 @@ Piece = pieces()
 enhancedEvaluation = EnhancedEvaluation()
 
 class FixedSizeList(list):
-    max_size = 200
-    size = 0
+    def __init__(self,max_size=100):
+        super().__init__() 
+        self.max_size = max_size  
+        self.size = 0
     def append(self, item):
-        if self.size<200:
+        if self.size<self.max_size:
             super().append(item)
+            size+=1
 
 
 class GameState:
 
     def __init__(self):
         self.fen_string =  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
-        
+        self.positions = 0
         
         self.board = [[0 for j in range(8)] for i in range(8)]
         #experimental
-        self.final_allowed_moves = FixedSizeList()
+        self.final_allowed_moves = FixedSizeList(max_size=200)
         self.total_moves = {}
         self.attack_squares = {}
         self.temp_attack_squares = {}
@@ -479,7 +482,6 @@ class GameState:
                             if is_extended_already:
                                 break
                             pinned_piece = True
-                            self.captures_moves_only[(start_square_row,start_square_col)].append(move)
                             #save the attack squares here
                             #do not break, continue checking to see if it is pinned
                             square_dict[(start_square_row,start_square_col)].extend(moves)
@@ -530,7 +532,7 @@ class GameState:
                 square_dict[(start_square_row,start_square_col)].append(move)
                 if Piece.is_type(self.board[square_row][square_col],Piece.king):
                     self.checked_path.append(move)
-                self.captures_moves_only[(start_square_row,start_square_col)].append(move)
+
 
 
 
@@ -675,9 +677,8 @@ class GameState:
             if Piece.is_color(self.board[king_row][king_col], self.board[initial_king_row][initial_king_col], True):
                 self.defended_squares.append((king_row,king_col))
                 continue
-            if Piece.is_color(self.board[king_row][king_col], self.board[initial_king_row][initial_king_col], False) and self.board[king_row][king_col]!=0:
-                self.captures_moves_only[(initial_king_row,initial_king_col)].append(move)
-            print(move.start_square,"HERE",move.target_square)
+            # if Piece.is_color(self.board[king_row][king_col], self.board[initial_king_row][initial_king_col], False) and self.board[king_row][king_col]!=0:
+            #     self.captures_moves_only[(initial_king_row,initial_king_col)].append(move)
             
             square_dict[(initial_king_row,initial_king_col)].append(move)
             
@@ -814,11 +815,9 @@ class GameState:
     def filter(self, square_dict, positions, attack_squares, is_current_player=False):
         remove_start_squares = []
         for start_square in square_dict:
-            #filter king moves that would put it under check
             row,col = start_square
             remove_list = []
             if Piece.is_type(self.board[row][col], Piece.king) and Piece.is_color(self.board[row][col],self.current_color):
-                #should not rmeove while iterating
                 for move in square_dict[start_square]:
                     for square in attack_squares:
                        
@@ -981,14 +980,15 @@ class GameState:
             return self.hash_dict[hash]
         self.start_new_round_minmax()
         self.filter_illegal_moves()
+        self.positions += 1
         self.order_moves()
        
         if depth==0:
             if self.no_moves() and self.human_player == self.current_color:
                 #return the largest -ve amount to acheive this outcome
-                return -100
+                return -1000
             elif self.no_moves() and self.AI_player == self.current_color:
-                return 100
+                return 1000
             # self.check_for_captures()
             self.hash_dict[hash] = enhancedEvaluation.evaluate(self.board, self.white_positions, self.black_positions, self.current_color)
             return self.hash_dict[hash]
