@@ -73,6 +73,8 @@ class GameState:
 
         self.black_positions = [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7),(1,0),(1,1),(1,2),(1,3),(1,4),(1,5),(1,6),(1,7)]
         self.white_positions = [(6,0),(6,1),(6,2),(6,3),(6,4),(6,5),(6,6),(6,7),(7,0),(7,1),(7,2),(7,3),(7,4),(7,5),(7,6),(7,7)]
+        self.black_king_piece_position = (0,0)
+        self.white_king_piece_position = (0,0)
 
         self.piece_keys = [[0 for _ in range(64)] for _ in range(12)]
         self.castling_keys =  [0 for _ in range(4)]
@@ -657,6 +659,27 @@ class GameState:
 
     
     def generate_king_moves(self,king_row,king_col, square_dict):
+        for move in square_dict[start_square]:
+            for square in attack_squares:
+                
+                if move.target_square == square.target_square:
+                    print("king moves to put it in check",move.start_square,move.target_square)
+                    s_row, s_col = square.start_square
+                    print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
+                    remove_list.append(move)
+                    break
+
+            for square in self.attacker_defended_squares:
+                if move.target_square == square:
+                    print("king moves to put it in check",move.start_square,move.target_square)
+                    s_row, s_col = square
+                    print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
+                    if move not in remove_list:
+                        remove_list.append(move)
+                    break
+
+
+
         
         initial_king_row = king_row
         initial_king_col = king_col
@@ -808,6 +831,13 @@ class GameState:
     def add_remainder_moves(self):
         total_moves = self.create_list_of_total_moves()
         self.final_allowed_moves.extend(total_moves)
+
+    
+    # we still do a move generation of the opp team to find the attack squares, filter these for the pinned pieces
+    # then use that to filter out the king pieces, also check if there is a neighbouring opp king piece
+
+
+         
           
 
 
@@ -869,6 +899,38 @@ class GameState:
 
         for start_square in remove_start_squares:
             del square_dict[start_square]
+
+
+    def remove_movement_of_king_piece(self, square_dict, positions, attack_squares, is_current_player=False):
+        king_position = self.white_king_piece_position
+        if self.current_color == Piece.black:
+            king_position = self.black_king_piece_position
+        for move in square_dict[king_position]:
+            for square in attack_squares:
+                
+                if move.target_square == square.target_square:
+                    print("king moves to put it in check",move.start_square,move.target_square)
+                    s_row, s_col = square.start_square
+                    print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
+                    remove_list.append(move)
+                    break
+
+            for square in self.attacker_defended_squares:
+                if move.target_square == square:
+                    print("king moves to put it in check",move.start_square,move.target_square)
+                    s_row, s_col = square
+                    print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
+                    if move not in remove_list:
+                        remove_list.append(move)
+                    break
+        
+
+
+
+    def remove_movement_of_pinned_piece(self, square_dict):
+        for pinned_piece in self.pinned_piece_paths:
+            if pinned_piece.target_square in square_dict:
+                del square_dict[pinned_piece.target_square]
 
             
 
