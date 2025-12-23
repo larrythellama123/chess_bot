@@ -73,8 +73,8 @@ class GameState:
 
         self.black_positions = [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7),(1,0),(1,1),(1,2),(1,3),(1,4),(1,5),(1,6),(1,7)]
         self.white_positions = [(6,0),(6,1),(6,2),(6,3),(6,4),(6,5),(6,6),(6,7),(7,0),(7,1),(7,2),(7,3),(7,4),(7,5),(7,6),(7,7)]
-        self.black_king_piece_position = (0,0)
-        self.white_king_piece_position = (0,0)
+        self.black_king_piece_position = (0,4)
+        self.white_king_piece_position = (7,4)
 
         self.piece_keys = [[0 for _ in range(64)] for _ in range(12)]
         self.castling_keys =  [0 for _ in range(4)]
@@ -522,7 +522,7 @@ class GameState:
                     return
 
                 move.target_square = (square_row, square_col)
-                square_dict[(start_square_row,start_square_col)].append(move)
+                # square_dict[(start_square_row,start_square_col)].append(move)
 
                 if Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],False):
                     if Piece.is_type(self.board[square_row][square_col],Piece.king):
@@ -659,28 +659,6 @@ class GameState:
 
     
     def generate_king_moves(self,king_row,king_col, square_dict):
-        for move in square_dict[start_square]:
-            for square in attack_squares:
-                
-                if move.target_square == square.target_square:
-                    print("king moves to put it in check",move.start_square,move.target_square)
-                    s_row, s_col = square.start_square
-                    print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
-                    remove_list.append(move)
-                    break
-
-            for square in self.attacker_defended_squares:
-                if move.target_square == square:
-                    print("king moves to put it in check",move.start_square,move.target_square)
-                    s_row, s_col = square
-                    print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
-                    if move not in remove_list:
-                        remove_list.append(move)
-                    break
-
-
-
-        
         initial_king_row = king_row
         initial_king_col = king_col
         if (initial_king_row,initial_king_col) not in square_dict.keys():
@@ -739,41 +717,100 @@ class GameState:
         self.board[row][col] = self.current_color|Piece.knight
 
         
-    def filter_illegal_moves(self):
-        self.final_allowed_moves = []
+    # def filter_illegal_moves(self):
+    #     self.final_allowed_moves = []
 
-        #if under check, get all the legal moves to be made
-        #if one of those moves intercepts the path of check 
-        attack_squares = self.create_list_attack_squares()
+    #     #if under check, get all the legal moves to be made
+    #     #if one of those moves intercepts the path of check 
+    #     attack_squares = self.create_list_attack_squares()
         
-        if self.current_color == Piece.white:
-            #filter list of new attack squares agaist the old ones
-            self.filter(self.attack_squares, self.black_positions, attack_squares)
-            self.temp_attack_squares = self.attack_squares
-            #redo the list of attack squares for the current player to use 
-            attack_squares = self.create_list_attack_squares()
-            if self.checked_path:
-                self.under_check(self.total_moves, self.white_positions, attack_squares, is_current_player=True)
-            else:
-                self.filter(self.total_moves, self.white_positions, attack_squares, is_current_player=True)
-                self.add_remainder_moves()
+    #     if self.current_color == Piece.white:
+    #         #filter list of new attack squares agaist the old ones
+    #         self.filter(self.attack_squares, self.black_positions, attack_squares)
+    #         self.temp_attack_squares = self.attack_squares
+    #         #redo the list of attack squares for the current player to use 
+    #         attack_squares = self.create_list_attack_squares()
+    #         if self.checked_path:
+    #             self.under_check(self.total_moves, self.white_positions, attack_squares, is_current_player=True)
+    #         else:
+    #             self.filter(self.total_moves, self.white_positions, attack_squares, is_current_player=True)
+    #             self.add_remainder_moves()
 
                                 
+    #     else:
+    #         # self.white_positions.clear()
+    #         self.filter(self.attack_squares, self.white_positions, attack_squares)
+    #         self.temp_attack_squares = self.attack_squares
+    #         #redo the list of attack squares for the current player to use 
+    #         attack_squares = self.create_list_attack_squares()
+    #         # self.black_positions.clear()
+
+    #         if self.checked_path:
+    #             self.under_check(self.total_moves, self.black_positions, attack_squares, is_current_player=True)
+    #         else:
+    #             self.filter(self.total_moves, self.black_positions, attack_squares, is_current_player=True)
+    #             self.add_remainder_moves()
+
+    
+    def filter_illegal_moves(self):
+        self.final_allowed_moves = []
+        attack_squares = self.create_list_attack_squares()
+        self.remove_movement_of_pinned_piece(self.attack_squares)
+        self.temp_attack_squares = self.attack_squares
+        attack_squares = self.create_list_attack_squares()
+        if self.checked_path:
+            self.remove_illegal_king_piece_movement(self.total_moves, attack_squares)
+            self.remove_movement_of_pinned_piece(self.total_moves)
+            self.add_remainder_moves_under_check()
         else:
-            # self.white_positions.clear()
-            self.filter(self.attack_squares, self.white_positions, attack_squares)
-            self.temp_attack_squares = self.attack_squares
-            #redo the list of attack squares for the current player to use 
-            attack_squares = self.create_list_attack_squares()
-            # self.black_positions.clear()
-
-            if self.checked_path:
-                self.under_check(self.total_moves, self.black_positions, attack_squares, is_current_player=True)
-            else:
-                self.filter(self.total_moves, self.black_positions, attack_squares, is_current_player=True)
-                self.add_remainder_moves()
+            self.remove_illegal_king_piece_movement(self.total_moves, attack_squares)
+            self.remove_movement_of_pinned_piece(self.total_moves)
+            self.add_remainder_moves()
 
 
+
+    
+    def remove_illegal_king_piece_movement(self,square_dict, attack_squares):
+        king_position = self.white_king_piece_position
+        if self.current_color == Piece.black:
+            king_position = self.black_king_piece_position
+        if king_position in square_dict:
+            remove_list = []
+            for move in square_dict[king_position]:
+                for square in attack_squares:
+                    if move.target_square == square.target_square:
+                        remove_list.append(move)
+                        break
+
+                for square in self.attacker_defended_squares:
+                    if move.target_square == square:
+                        if move not in remove_list:
+                            remove_list.append(move)
+                        break
+            for move in remove_list:
+                square_dict[king_position].remove(move)
+        
+         
+    
+
+    def remove_movement_of_pinned_piece(self, square_dict):
+        for pinned_piece in self.pinned_piece_paths:
+            if pinned_piece.target_square in square_dict:
+                del square_dict[pinned_piece.target_square]
+
+
+    def add_remainder_moves(self):
+        total_moves = self.create_list_of_total_moves()
+        self.final_allowed_moves.extend(total_moves)
+
+
+    def add_remainder_moves_under_check(self):
+        total_moves = self.create_list_of_total_moves()
+        for move in total_moves:
+            self.remove_castle_moves(move,total_moves)
+            for checked_move in self.checked_path:
+                if (move.target_square == checked_move.target_square or move.target_square==checked_move.start_square):
+                    self.final_allowed_moves.append(move)
 
 
     def remove_castle_moves(self, move,total_moves):
@@ -790,54 +827,12 @@ class GameState:
             if move in self.final_allowed_moves:
                 self.final_allowed_moves.remove(move)
 
-    def under_check(self, square_dict, positions, attack_squares, is_current_player=False):
-        for start_square in square_dict:
-            # filter king moves that would put it under check again
-            row,col = start_square
-            remove_list = []
-            if Piece.is_type(self.board[row][col], Piece.king) and Piece.is_color(self.board[row][col],self.current_color):
-                for move in square_dict[start_square]:
-                    for square in attack_squares:
-                        if move.target_square == square.target_square:
-                            print("king moves to put it in check",move.start_square,move.target_square)
-                            s_row, s_col = square.start_square
-                            print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
-                            remove_list.append(move)
-                            break
-
-                    for square in self.attacker_defended_squares:
-                         if move.target_square == square:
-                            print("king moves to put it in check",move.start_square,move.target_square)
-                            s_row, s_col = square
-                            print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
-                            remove_list.append(move)
-                            break
-                        
-
-                for move in remove_list:
-                    square_dict[start_square].remove(move)
-
-                if is_current_player:
-                    self.final_allowed_moves.extend(square_dict[start_square])
-
-        total_moves = self.create_list_of_total_moves()
-        for move in total_moves:
-            self.remove_castle_moves(move,total_moves)
-            for checked_move in self.checked_path:
-                row, col  = move.start_square
-                if (move.target_square == checked_move.target_square or move.target_square==checked_move.start_square):
-                    self.final_allowed_moves.append(move)
-
-    def add_remainder_moves(self):
-        total_moves = self.create_list_of_total_moves()
-        self.final_allowed_moves.extend(total_moves)
 
     
     # we still do a move generation of the opp team to find the attack squares, filter these for the pinned pieces
     # then use that to filter out the king pieces, also check if there is a neighbouring opp king piece
 
 
-         
           
 
 
@@ -852,17 +847,17 @@ class GameState:
                     for square in attack_squares:
                        
                         if move.target_square == square.target_square:
-                            print("king moves to put it in check",move.start_square,move.target_square)
+                            # print("king moves to put it in check",move.start_square,move.target_square)
                             s_row, s_col = square.start_square
-                            print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
+                            # print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
                             remove_list.append(move)
                             break
 
                     for square in self.attacker_defended_squares:
                         if move.target_square == square:
-                            print("king moves to put it in check",move.start_square,move.target_square)
+                            # print("king moves to put it in check",move.start_square,move.target_square)
                             s_row, s_col = square
-                            print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
+                            # print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
                             if move not in remove_list:
                                 remove_list.append(move)
                             break
@@ -899,39 +894,6 @@ class GameState:
 
         for start_square in remove_start_squares:
             del square_dict[start_square]
-
-
-    def remove_movement_of_king_piece(self, square_dict, positions, attack_squares, is_current_player=False):
-        king_position = self.white_king_piece_position
-        if self.current_color == Piece.black:
-            king_position = self.black_king_piece_position
-        for move in square_dict[king_position]:
-            for square in attack_squares:
-                
-                if move.target_square == square.target_square:
-                    print("king moves to put it in check",move.start_square,move.target_square)
-                    s_row, s_col = square.start_square
-                    print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
-                    remove_list.append(move)
-                    break
-
-            for square in self.attacker_defended_squares:
-                if move.target_square == square:
-                    print("king moves to put it in check",move.start_square,move.target_square)
-                    s_row, s_col = square
-                    print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
-                    if move not in remove_list:
-                        remove_list.append(move)
-                    break
-        
-
-
-
-    def remove_movement_of_pinned_piece(self, square_dict):
-        for pinned_piece in self.pinned_piece_paths:
-            if pinned_piece.target_square in square_dict:
-                del square_dict[pinned_piece.target_square]
-
             
 
 
@@ -1052,7 +1014,7 @@ class GameState:
             elif self.no_moves() and self.AI_player == self.current_color:
                 return 1000
             # self.check_for_captures()
-            self.hash_dict[hash] = enhancedEvaluation.evaluate(self.board, self.white_positions, self.black_positions, self.current_color)
+            self.hash_dict[hash] = enhancedEvaluation.evaluate(self.board, self.current_color)
             return self.hash_dict[hash]
            
         
@@ -1298,35 +1260,34 @@ class GameState:
         #             break 
         
 
-    def score_move(self):
+    def score_move(self, move):
         capturedPieceValueMultiplier = 10
         squareControlledByOpponentPawnPenalty = 350
-        for move in self.final_allowed_moves:
-            move_score = 0
-            s_row,s_col = move.start_square
-            t_row,t_col = move.target_square
-            move_piece = self.board[s_row][s_col]
-            target_piece = self.board[t_row][t_col]
+        move_score = 0
+        s_row,s_col = move.start_square
+        t_row,t_col = move.target_square
+        move_piece = self.board[s_row][s_col]
+        target_piece = self.board[t_row][t_col]
 
-            if target_piece==0:
-                move_score = capturedPieceValueMultiplier * GetPieceValue (target_piece) - GetPieceValue (move_piece)
+        if target_piece!=0:
+            move_score = capturedPieceValueMultiplier * GetPieceValue (target_piece) - GetPieceValue (move_piece)
 
 
-            #check if it results in pawn promotion
-            if t_row==7 or t_row == 0 and Piece.is_type(move_piece,Piece.pawn):
-                move_score += enhancedEvaluation.QUEEN_VALUE
+        #check if it results in pawn promotion
+        if t_row==7 or t_row == 0 and Piece.is_type(move_piece,Piece.pawn):
+            move_score += enhancedEvaluation.QUEEN_VALUE
 
-            #penalize for moving to an attacked sqaure
-            if move.target_square in self.attack_squares or move.target_square in self.attacker_defended_squares:
-                #grade by the value of the piece
-                move_score -= squareControlledByOpponentPawnPenalty 
+        #penalize for moving to an attacked sqaure
+        if move.target_square in self.attack_squares or move.target_square in self.attacker_defended_squares:
+            #grade by the value of the piece
+            move_score -= squareControlledByOpponentPawnPenalty 
             
         return move_score
 
     def order_moves(self):
         scored_moves= []
         for move in self.final_allowed_moves:
-            score  = self.score_move()
+            score  = self.score_move(move)
             scored_moves.append((score, move))
         scored_moves.sort(key=lambda x:x[0],reverse=True)
         self.final_allowed_moves = [move for  _,move in scored_moves]

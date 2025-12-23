@@ -134,10 +134,21 @@ class EnhancedEvaluation:
             'king_endgame': king_endgame_table
         }
 
-    def evaluate(self, board, white_positions, black_positions, current_color):
+    def evaluate(self, board, current_color):
         """
         Main evaluation function - returns score from current player's perspective
         """
+        white_positions = []
+        black_positions = []
+
+        for i in range(8):
+            for j in range(8):
+                if Piece.is_color(board[i][j],Piece.white,True):
+                    white_positions.append((i,j))
+                elif Piece.is_color(board[i][j],Piece.black,True):
+                    black_positions.append((i,j))
+
+
         # Reset evaluation data
         white_eval = EvaluationData()
         black_eval = EvaluationData()
