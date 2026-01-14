@@ -349,7 +349,7 @@ while run:
                 gameState.initial_depth = 3
                 temp_GS = copy.deepcopy(gameState)
                 print(temp_GS.current_color,"BLACK")
-                temp_GS.minmax(gameState.initial_depth,False,float('-inf'),float('inf'))
+                temp_GS.minmax(gameState.initial_depth,True,float('-inf'),float('inf'))
                 gameState.best_move = temp_GS.best_move 
                 AI_move(black_positions_save,white_positions_save)
                 gameState.change_current_color()
