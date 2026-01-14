@@ -32,17 +32,35 @@
 from piece import pieces
 from move import Move
 from square import squares
-from evaluation import EnhancedEvaluation
 import copy
+from collections import defaultdict
+from evaluation import EnhancedEvaluation
+import math
+
 Square = squares()
 Piece = pieces()
+enhancedEvaluation = EnhancedEvaluation()
+
+class FixedSizeList(list):
+    def __init__(self,max_size=100):
+        super().__init__() 
+        self.max_size = max_size  
+        self.size = 0
+    def append(self, item):
+        if self.size<self.max_size:
+            super().append(item)
+            size+=1
+
+
 class GameState:
 
     def __init__(self):
         self.fen_string =  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
+        self.positions = 0
+        
         self.board = [[0 for j in range(8)] for i in range(8)]
         #experimental
-        self.final_allowed_moves = [] 
+        self.final_allowed_moves = FixedSizeList(max_size=200)
         self.total_moves = {}
         self.attack_squares = {}
         self.temp_attack_squares = {}
@@ -55,15 +73,33 @@ class GameState:
 
         self.black_positions = [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7),(1,0),(1,1),(1,2),(1,3),(1,4),(1,5),(1,6),(1,7)]
         self.white_positions = [(6,0),(6,1),(6,2),(6,3),(6,4),(6,5),(6,6),(6,7),(7,0),(7,1),(7,2),(7,3),(7,4),(7,5),(7,6),(7,7)]
+        self.black_king_piece_position = (0,4)
+        self.white_king_piece_position = (7,4)
+
+        self.piece_keys = [[0 for _ in range(64)] for _ in range(12)]
+        self.castling_keys =  [0 for _ in range(4)]
+        self.black_side_key = 0
+        self.hash_dict = defaultdict(int)
 
         self.translate_fen_strings()
-        # self.distance_to_edge = {'n':0,'s':0,'e':0,'w':0, 'ne':0, 'nw':0, 'se':0, 'sw':0}
-        self.distance_to_edge_white = {}
-        self.distance_to_edge_black = {}
-
         self.knight_offsets = {'te':(2,1),'tw':(2,-1),'be':(-2,1),'bw':(-2,-1),'htw':(1,2),'hte':(1,-2),'hbe':(-1,2),'hbw':(-1,-2)}
         self.knight_positions = {'LWK':(7,1),'RWK':(7,6),'LBK':(0,1),'RBK':(0,6)}
         self.knight_moves_dict = {}
+        self.generate_knight_moves(0,1,self.knight_moves_dict)
+        self.generate_knight_moves(0,6,self.knight_moves_dict)
+        self.generate_knight_moves(7,1,self.knight_moves_dict)
+        self.generate_knight_moves(7,6,self.knight_moves_dict)
+
+
+
+        self.generate_piece_keys()
+        self.generate_castling_keys()
+        self.generate_side_key()
+
+        self.distance_to_edge_white = {}
+        self.distance_to_edge_black = {}
+
+        
 
         self.defended_squares = []
         self.attacker_defended_squares = []
@@ -134,6 +170,13 @@ class GameState:
                 piece_color = Piece.black
             self.board[row][col] = piece_color|piece_type
             col += 1
+
+        # self.board[0][7] = 0 
+        # self.board[1][7] = 0 
+        # self.board[0][6] = 0 
+        # self.board[1][6] = 0 
+
+        # self.board[3][7] = Piece.white|Piece.queen
 
         return self.board
 
@@ -229,12 +272,8 @@ class GameState:
             self.current_color = Piece.white
             self.captures_moves_only = {}
             for position in self.white_positions:
-                # print("positions:",position)
                 start_square_row, start_square_col = position
                 self.move_generate(start_square_row,start_square_col, self.total_moves, is_current_player=True)
-
-            # if(self.no_moves):
-            #     # print("COOKED")
         else:
             self.attack_color = Piece.white
             self.current_color = Piece.white
@@ -249,59 +288,53 @@ class GameState:
                 self.move_generate(start_square_row,start_square_col, self.total_moves,is_current_player=True)
 
 
+    def loop_board_opp(self, color, dict):
+        for row in range(8):
+            for col in range(8):
+                if Piece.is_color(self.board[row][col],color):
+                    start_square_row, start_square_col = row, col
+                    self.move_generate(start_square_row,start_square_col, dict)
 
-    def start_new_round_minmax(self):
+    def loop_board_normal(self, color, dict):
+        for row in range(8):
+            for col in range(8):
+                if Piece.is_color(self.board[row][col],color):
+                    start_square_row, start_square_col = row, col
+                    self.move_generate(start_square_row,start_square_col, dict, is_current_player=True)
+
+    def start_new_round_minmax(self,captures_only=False):
         self.total_moves = {}
         self.attack_squares = {}
         self.pinned_piece_paths = []
         self.checked_path = []
         self.defended_squares = []
-        list_to_generate_moves_after_attackers_completed = []
         if self.current_color == Piece.white:
             self.attack_color = Piece.black
             self.current_color = Piece.black
-            for row in range(8):
-                for col in range(8):
-                    if self.board[row][col] !=0:
-                        if Piece.is_color(self.board[row][col],Piece.black,True): 
-                            self.current_color = Piece.black
-                            self.move_generate(row,col, self.attack_squares)
-                        else:
-                            list_to_generate_moves_after_attackers_completed.append((row,col))
-                            # self.current_color = Piece.white
-                            # self.move_generate(row,col, self.total_moves, is_current_player=True)
-            self.attacker_defended_squares = copy.copy(self.defended_squares)                
+            self.loop_board_opp(Piece.black, self.attack_squares)
+            self.attacker_defended_squares = copy.copy(self.defended_squares)
             self.current_color = Piece.white
-            for square in list_to_generate_moves_after_attackers_completed:
-                row,col = square
-                self.move_generate(row,col, self.total_moves, is_current_player=True)    
+            self.captures_moves_only = {}
+            self.loop_board_normal(Piece.white, self.total_moves)
         else:
             self.attack_color = Piece.white
             self.current_color = Piece.white
-            for row in range(8):
-                for col in range(8):
-                    if self.board[row][col] !=0:
-                        if Piece.is_color(self.board[row][col],Piece.white,True): 
-                            self.current_color = Piece.white
-                            self.move_generate(row,col, self.total_moves, is_current_player=True)
-                        else:
-                            list_to_generate_moves_after_attackers_completed.append((row,col))
-                            # self.current_color = Piece.black
-                            # self.move_generate(row,col, self.total_moves, is_current_player=True)
+            self.loop_board_opp(Piece.white, self.attack_squares)
             self.attacker_defended_squares = copy.copy(self.defended_squares)
+            self.captures_moves_only = {}
             self.current_color = Piece.black
-            for square in list_to_generate_moves_after_attackers_completed:
-                row,col = square
-                self.move_generate(row,col, self.total_moves, is_current_player=True)    
+            self.loop_board_normal(Piece.black, self.total_moves)
+          
 
+
+
+ 
 
 
     def move_generate(self,start_square_row, start_square_col, square_dict, is_current_player=False, captures_only=False):  
 
         color = Piece.get_piece_color(self.board[start_square_row][start_square_col])  
         if Piece.is_type(self.board[start_square_row][start_square_col],Piece.bishop):
-            #generate attack sqaures for the config of opp pieces first            
-
             self.generate_sliding_moves(start_square_row, start_square_col,Piece.bishop,color, square_dict)
         
         if Piece.is_type(self.board[start_square_row][start_square_col],Piece.rook):
@@ -317,7 +350,6 @@ class GameState:
             self.generate_pawn_moves(start_square_row, start_square_col, square_dict)
 
         if Piece.is_type(self.board[start_square_row][start_square_col],Piece.knight):
-            self.generate_knight_moves(start_square_row,start_square_col,self.knight_moves_dict)
             self.add_knight_squares(square_dict, start_square_row, start_square_col)
 
 
@@ -347,14 +379,8 @@ class GameState:
         square_dict[(start_square_row,start_square_col)] = []
         self.captures_moves_only[(start_square_row,start_square_col)] = []
         for distance_index in limit:
-            # if break_flag == True:
-            #     break_flag = False
-            #     continue
             moves = []
             pinned_piece = False
-            # print(f"distance index: {distance_index}")
-            # print(f"length:{distance_to_edge[(start_square_row,start_square_col)][distance_index]}")
-            # print(f"start_sq_row:{start_square_row}, start_sq_col:{start_square_col}")
             square_row = start_square_row
             square_col = start_square_col
             is_extended_already = False
@@ -458,7 +484,6 @@ class GameState:
                             if is_extended_already:
                                 break
                             pinned_piece = True
-                            self.captures_moves_only[(start_square_row,start_square_col)].append(move)
                             #save the attack squares here
                             #do not break, continue checking to see if it is pinned
                             square_dict[(start_square_row,start_square_col)].extend(moves)
@@ -486,6 +511,31 @@ class GameState:
             if self.current_color != self.attack_color:
                 square_dict[(square_row,square_col)].append(move)
 
+    def pawn_attack_moves(self, start_square_row, start_square_col, square_row, square_col,move, square_dict):
+        if (square_row<8 and square_row > -1 and square_col<8 and square_col >-1):
+
+            #attacker squares added regardless
+            if self.current_color == self.attack_color:
+                #this will then be passed to the attacker defended squares list
+                if Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],True):
+                    self.defended_squares.append((square_row,square_col))
+                    return
+
+                move.target_square = (square_row, square_col)
+                # square_dict[(start_square_row,start_square_col)].append(move)
+
+                if Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],False):
+                    if Piece.is_type(self.board[square_row][square_col],Piece.king):
+                        self.checked_path.append(move)
+        
+            #for actual player
+            elif Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],False):
+                move.target_square = (square_row, square_col)
+                square_dict[(start_square_row,start_square_col)].append(move)
+                if Piece.is_type(self.board[square_row][square_col],Piece.king):
+                    self.checked_path.append(move)
+
+
 
 
     def generate_pawn_moves(self,square_row, square_col, square_dict):
@@ -502,7 +552,7 @@ class GameState:
                 move = Move()
                 move.start_square = (square_row, square_col)
                 square_row -= 1 
-                if self.board[square_row][square_col]==0:
+                if (square_row > -1) and self.board[square_row][square_col]==0:
                     move.target_square = (square_row, square_col)
                     if self.current_color != self.attack_color:
                         square_dict[(start_square_row,start_square_col)].append(move)
@@ -514,22 +564,7 @@ class GameState:
             move.start_square = (square_row, square_col)
             square_row -= 1
             square_col += 1
-            if (square_row<8 and square_row > -1 and square_col<8 and square_col >-1):
-                if self.current_color == self.attack_color:
-                    move.target_square = (square_row, square_col)
-                    square_dict[(start_square_row,start_square_col)].append(move)
-                elif self.current_color == self.attack_color or Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],False):
-                    move.target_square = (square_row, square_col)
-                    square_dict[(start_square_row,start_square_col)].append(move)
-                    if Piece.is_type(self.board[square_row][square_col],Piece.king):
-                        self.checked_path.append(move)
-                    self.captures_moves_only[(start_square_row,start_square_col)].append(move)
-                elif Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],True):
-                    self.defended_squares.append((square_row,square_col))
-
-        
-
-
+            self.pawn_attack_moves(start_square_row, start_square_col, square_row, square_col,move,square_dict)
             square_row += 1
             square_col -= 1
 
@@ -538,18 +573,8 @@ class GameState:
             move.start_square = (square_row, square_col)
             square_row -= 1
             square_col -= 1
-            if (square_row<8 and square_row > -1 and square_col<8 and square_col >-1):
-                if self.current_color == self.attack_color:
-                    move.target_square = (square_row, square_col)
-                    square_dict[(start_square_row,start_square_col)].append(move)
-                elif self.current_color == self.attack_color or Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],False):
-                    move.target_square = (square_row, square_col)
-                    square_dict[(start_square_row,start_square_col)].append(move)
-                    if Piece.is_type(self.board[square_row][square_col],Piece.king):
-                        self.checked_path.append(move)
-                    self.captures_moves_only[(start_square_row,start_square_col)].append(move)
-                elif Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],True):
-                    self.defended_squares.append((square_row,square_col))
+            self.pawn_attack_moves(start_square_row, start_square_col, square_row, square_col,move,square_dict)
+           
         else:
             if (square_row,square_col) in Square.black_pawn_original_location:
                 self.move_pawn_two_spaces(square_row,square_col,square_dict,2)
@@ -557,7 +582,7 @@ class GameState:
                 move = Move()
                 move.start_square = (square_row, square_col)
                 square_row += 1 
-                if self.board[square_row][square_col]==0:
+                if (square_row < 8) and self.board[square_row][square_col]==0:
                     move.target_square = (square_row, square_col)
                     square_dict[(start_square_row,start_square_col)].append(move)
                 square_row -= 1
@@ -567,18 +592,7 @@ class GameState:
             move.start_square = (square_row, square_col)
             square_row += 1
             square_col += 1
-            if (square_row<8 and square_row > -1 and square_col<8 and square_col >-1):
-                if self.current_color == self.attack_color:
-                    move.target_square = (square_row, square_col)
-                    square_dict[(start_square_row,start_square_col)].append(move)
-                elif Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],False):
-                    move.target_square = (square_row, square_col)
-                    square_dict[(start_square_row,start_square_col)].append(move)
-                    if Piece.is_type(self.board[square_row][square_col],Piece.king):
-                        self.checked_path.append(move)
-                    self.captures_moves_only[(start_square_row,start_square_col)].append(move)
-                elif Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],True):
-                    self.defended_squares.append((square_row,square_col))
+            self.pawn_attack_moves(start_square_row, start_square_col, square_row, square_col,move,square_dict)
             square_row -= 1
             square_col -= 1
 
@@ -587,18 +601,7 @@ class GameState:
             move.start_square = (square_row, square_col)
             square_row += 1
             square_col -= 1
-            if (square_row<8 and square_row > -1 and square_col<8 and square_col >-1):
-                if self.current_color == self.attack_color:
-                    move.target_square = (square_row, square_col)
-                    square_dict[(start_square_row,start_square_col)].append(move)
-                elif Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],False):
-                    move.target_square = (square_row, square_col)
-                    square_dict[(start_square_row,start_square_col)].append(move)
-                    if Piece.is_type(self.board[square_row][square_col],Piece.king):
-                        self.checked_path.append(move)
-                    self.captures_moves_only[(start_square_row,start_square_col)].append(move)
-                elif Piece.is_color(self.board[square_row][square_col],self.board[start_square_row][start_square_col],True):
-                    self.defended_squares.append((square_row,square_col))
+            self.pawn_attack_moves(start_square_row, start_square_col, square_row, square_col,move,square_dict)
             
         
                 
@@ -656,7 +659,6 @@ class GameState:
 
     
     def generate_king_moves(self,king_row,king_col, square_dict):
-        
         initial_king_row = king_row
         initial_king_col = king_col
         if (initial_king_row,initial_king_col) not in square_dict.keys():
@@ -676,8 +678,9 @@ class GameState:
             if Piece.is_color(self.board[king_row][king_col], self.board[initial_king_row][initial_king_col], True):
                 self.defended_squares.append((king_row,king_col))
                 continue
-            if Piece.is_color(self.board[king_row][king_col], self.board[initial_king_row][initial_king_col], False) and self.board[king_row][king_col]!=0:
-                self.captures_moves_only[(initial_king_row,initial_king_col)].append(move)
+            # if Piece.is_color(self.board[king_row][king_col], self.board[initial_king_row][initial_king_col], False) and self.board[king_row][king_col]!=0:
+            #     self.captures_moves_only[(initial_king_row,initial_king_col)].append(move)
+            
             square_dict[(initial_king_row,initial_king_col)].append(move)
             
     
@@ -714,55 +717,100 @@ class GameState:
         self.board[row][col] = self.current_color|Piece.knight
 
         
+    # def filter_illegal_moves(self):
+    #     self.final_allowed_moves = []
+
+    #     #if under check, get all the legal moves to be made
+    #     #if one of those moves intercepts the path of check 
+    #     attack_squares = self.create_list_attack_squares()
+        
+    #     if self.current_color == Piece.white:
+    #         #filter list of new attack squares agaist the old ones
+    #         self.filter(self.attack_squares, self.black_positions, attack_squares)
+    #         self.temp_attack_squares = self.attack_squares
+    #         #redo the list of attack squares for the current player to use 
+    #         attack_squares = self.create_list_attack_squares()
+    #         if self.checked_path:
+    #             self.under_check(self.total_moves, self.white_positions, attack_squares, is_current_player=True)
+    #         else:
+    #             self.filter(self.total_moves, self.white_positions, attack_squares, is_current_player=True)
+    #             self.add_remainder_moves()
+
+                                
+    #     else:
+    #         # self.white_positions.clear()
+    #         self.filter(self.attack_squares, self.white_positions, attack_squares)
+    #         self.temp_attack_squares = self.attack_squares
+    #         #redo the list of attack squares for the current player to use 
+    #         attack_squares = self.create_list_attack_squares()
+    #         # self.black_positions.clear()
+
+    #         if self.checked_path:
+    #             self.under_check(self.total_moves, self.black_positions, attack_squares, is_current_player=True)
+    #         else:
+    #             self.filter(self.total_moves, self.black_positions, attack_squares, is_current_player=True)
+    #             self.add_remainder_moves()
+
+    
     def filter_illegal_moves(self):
         self.final_allowed_moves = []
-        #if under check, get all the legal moves to be made
-        #if one of those moves intercepts the path of check 
         attack_squares = self.create_list_attack_squares()
-        if self.current_color == Piece.white:
-            # self.black_positions.clear()
-            #filter list of new attack squares agaist the old ones
-            self.filter(self.attack_squares, self.black_positions, attack_squares)
-            self.temp_attack_squares = self.attack_squares
-            #redo the list of attack squares for the current player to use 
-            attack_squares = self.create_list_attack_squares()
-            # self.white_positions.clear()
-            self.filter(self.total_moves, self.white_positions, attack_squares, is_current_player=True)
-            self.under_check()
-                                
-        else:
-            # self.white_positions.clear()
-            self.filter(self.attack_squares, self.white_positions, attack_squares)
-            self.temp_attack_squares = self.attack_squares
-            #redo the list of attack squares for the current player to use 
-            attack_squares = self.create_list_attack_squares()
-            # self.black_positions.clear()
-            self.filter(self.total_moves, self.black_positions, attack_squares, is_current_player=True)
-            self.under_check()
-
-
-    def filter_illegal_moves_minmax(self):
-        self.final_allowed_moves = []
-        #if under check, get all the legal moves to be made
-        #if one of those moves intercepts the path of check 
+        self.remove_movement_of_pinned_piece(self.attack_squares)
+        self.temp_attack_squares = self.attack_squares
         attack_squares = self.create_list_attack_squares()
-        if self.current_color == Piece.white:
-            #filter list of new attack squares agaist the old ones
-            self.filter_minmax(self.attack_squares, attack_squares)
-            self.temp_attack_squares = self.attack_squares
-            #redo the list of attack squares for the current player to use 
-            attack_squares = self.create_list_attack_squares()
-            self.filter_minmax(self.total_moves, attack_squares, is_current_player=True)
-            self.under_check()
-                                
+        if self.checked_path:
+            self.remove_illegal_king_piece_movement(self.total_moves, attack_squares)
+            self.remove_movement_of_pinned_piece(self.total_moves)
+            self.add_remainder_moves_under_check()
         else:
-            self.filter_minmax(self.attack_squares, attack_squares)
-            self.temp_attack_squares = self.attack_squares
-            #redo the list of attack squares for the current player to use 
-            attack_squares = self.create_list_attack_squares()
-            self.filter_minmax(self.total_moves, attack_squares, is_current_player=True)
-            self.under_check()
+            self.remove_illegal_king_piece_movement(self.total_moves, attack_squares)
+            self.remove_movement_of_pinned_piece(self.total_moves)
+            self.add_remainder_moves()
 
+
+
+    
+    def remove_illegal_king_piece_movement(self,square_dict, attack_squares):
+        king_position = self.white_king_piece_position
+        if self.current_color == Piece.black:
+            king_position = self.black_king_piece_position
+        if king_position in square_dict:
+            remove_list = []
+            for move in square_dict[king_position]:
+                for square in attack_squares:
+                    if move.target_square == square.target_square:
+                        remove_list.append(move)
+                        break
+
+                for square in self.attacker_defended_squares:
+                    if move.target_square == square:
+                        if move not in remove_list:
+                            remove_list.append(move)
+                        break
+            for move in remove_list:
+                square_dict[king_position].remove(move)
+        
+         
+    
+
+    def remove_movement_of_pinned_piece(self, square_dict):
+        for pinned_piece in self.pinned_piece_paths:
+            if pinned_piece.target_square in square_dict:
+                del square_dict[pinned_piece.target_square]
+
+
+    def add_remainder_moves(self):
+        total_moves = self.create_list_of_total_moves()
+        self.final_allowed_moves.extend(total_moves)
+
+
+    def add_remainder_moves_under_check(self):
+        total_moves = self.create_list_of_total_moves()
+        for move in total_moves:
+            self.remove_castle_moves(move,total_moves)
+            for checked_move in self.checked_path:
+                if (move.target_square == checked_move.target_square or move.target_square==checked_move.start_square):
+                    self.final_allowed_moves.append(move)
 
 
     def remove_castle_moves(self, move,total_moves):
@@ -779,47 +827,37 @@ class GameState:
             if move in self.final_allowed_moves:
                 self.final_allowed_moves.remove(move)
 
-    def under_check(self):
-        total_moves = self.create_list_of_total_moves()
-        #pick from the list of final allowed moves
-        # temp_final_allowed_moves = []
-  
-        if self.checked_path:       
-            for checked_move in self.checked_path:
-                for move in total_moves:
-                    self.remove_castle_moves(move,total_moves)
-                    if move.target_square == checked_move.target_square or move.target_square == checked_move.start_square:
-                        self.final_allowed_moves.append(move)
 
-        else:
-            self.final_allowed_moves.extend(total_moves)
+    
+    # we still do a move generation of the opp team to find the attack squares, filter these for the pinned pieces
+    # then use that to filter out the king pieces, also check if there is a neighbouring opp king piece
+
+
+          
 
 
         
     def filter(self, square_dict, positions, attack_squares, is_current_player=False):
         remove_start_squares = []
         for start_square in square_dict:
-            # positions.append(start_square)
-            #filter king moves that would put it under check
             row,col = start_square
             remove_list = []
             if Piece.is_type(self.board[row][col], Piece.king) and Piece.is_color(self.board[row][col],self.current_color):
-                #should not rmeove while iterating
                 for move in square_dict[start_square]:
                     for square in attack_squares:
                        
                         if move.target_square == square.target_square:
-                            print("king moves to put it in check",move.start_square,move.target_square)
+                            # print("king moves to put it in check",move.start_square,move.target_square)
                             s_row, s_col = square.start_square
-                            print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
+                            # print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
                             remove_list.append(move)
                             break
 
                     for square in self.attacker_defended_squares:
                         if move.target_square == square:
-                            print("king moves to put it in check",move.start_square,move.target_square)
+                            # print("king moves to put it in check",move.start_square,move.target_square)
                             s_row, s_col = square
-                            print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
+                            # print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
                             if move not in remove_list:
                                 remove_list.append(move)
                             break
@@ -856,68 +894,8 @@ class GameState:
 
         for start_square in remove_start_squares:
             del square_dict[start_square]
-
-            
-    def filter_minmax(self, square_dict, attack_squares, is_current_player=False):
-
-        remove_start_squares = []
-        for start_square in square_dict:
-            #filter king moves that would put it under check
-            row,col = start_square
-            remove_list = []
-            if Piece.is_type(self.board[row][col], Piece.king) and Piece.is_color(self.board[row][col],self.current_color):
-                #should not rmeove while iterating
-                for move in square_dict[start_square]:
-                    for square in attack_squares:
-                       
-                        if move.target_square == square.target_square:
-                            print("king moves to put it in check",move.start_square,move.target_square)
-                            s_row, s_col = square.start_square
-                            print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
-                            remove_list.append(move)
-                            break
-
-                    for square in self.attacker_defended_squares:
-                        if move.target_square == square:
-                            print("king moves to put it in check",move.start_square,move.target_square)
-                            s_row, s_col = square
-                            print(self.board[s_row][s_col], "this is the piece cuasing issues ",(s_row,s_col))
-                            if move not in remove_list:
-                                remove_list.append(move)
-                            break
-
-                for move in remove_list:
-                    square_dict[start_square].remove(move)
-
-                if is_current_player:
-                    self.final_allowed_moves.extend(square_dict[start_square])
-
             
 
-            #implement 2 methods, check if the piece can end the life of the opp piece pinning it 
-            #but first check if more than one piece has it pinned 
-            pinners = 0
-            pinner_square = (0,0)
-            for pinned_piece in self.pinned_piece_paths:
-                if start_square == pinned_piece.target_square:
-                    pinner_square = pinned_piece.start_square
-                    pinners+=1 #
-
-            if pinners == 1:
-                remove = True
-                for move in square_dict[start_square]:
-                    if move.target_square == pinner_square:
-                        remove = False
-                        break
-                if remove:
-                    remove_start_squares.append(start_square)
-
-                
-            if pinners == 2:
-                remove_start_squares.append(start_square)
-
-        for start_square in remove_start_squares:
-            del square_dict[start_square]
 
 
     def resetting_back_changed_castling_flags(self,recent_changed_castle_flags):
@@ -1019,83 +997,49 @@ class GameState:
 
 
 ########################MINMAX SECTION################################################
-        
+    
     def minmax(self, depth, is_maximising,alpha, beta):
-        # print(self.current_color,"current",depth)
-        self.start_new_round()
+        hash = self.compute_hash_key()
+        if self.hash_dict[hash] != 0:
+            return self.hash_dict[hash]
+        self.start_new_round_minmax()
         self.filter_illegal_moves()
-        # self.order_moves()
-
-
-        # if depth == 0 or self.no_moves():
+        self.positions += 1
+        self.order_moves()
+       
         if depth==0:
-            # if self.no_moves() and self.human_player == self.current_color:
-            #     #return the largest -ve amount to acheive this outcome
-            #     return -100
-            # elif self.no_moves() and self.AI_player == self.current_color:
-            #     return 100
-            # print(self.white_positions,"whitreiessd")
-            # a = self.check_for_captures(float("-inf"),float("inf"))
-            # print("final eval score",a)
-            # return self.check_for_captures(float("-inf"),float("inf"))
-            return self.enhanced_evaluate()
-
-        final_allowed_moves = copy.copy(self.final_allowed_moves)
+            if self.no_moves() and self.human_player == self.current_color:
+                #return the largest -ve amount to acheive this outcome
+                return -1000
+            elif self.no_moves() and self.AI_player == self.current_color:
+                return 1000
+            # self.check_for_captures()
+            self.hash_dict[hash] = enhancedEvaluation.evaluate(self.board, self.current_color)
+            return self.hash_dict[hash]
+           
+        
+        final_allowed_moves = self.final_allowed_moves
         recent_changed_castle_flags = copy.copy(self.castle_flags)
         pawn_to_knight = False
         pawn_to_queen = False
         if is_maximising:
             best_score = float("-inf")
             for move in final_allowed_moves:
-                was_removed = False
                 target_row, target_col = move.target_square
                 start_row, start_col = move.start_square
-                # print(move.start_square,move.target_square,"is this empty alredy",self.board[self])
                 piece = self.board[start_row][start_col]
                 target_piece = self.board[target_row][target_col]
                 self.board[start_row][start_col] = 0
                 self.board[target_row][target_col] =piece
 
-                #check if pawn has reached the end and change it to a queen first
-                #append the move back to the end of the list to check for knight after
-                # if self.check_if_pawn_can_change(target_row,target_col): 
-                #     self.change_pawn_queen_and_append_back_move(target_row,target_col,final_allowed_moves,move)
-                #     pawn_to_queen = True
-                #     pawn_to_knight = False
-                # elif pawn_to_queen and self.check_if_pawn_can_change(target_row,target_col):
-                #     self.change_pawn_knight(target_row, target_col)
-                #     pawn_to_knight = True
-                #     pawn_to_queen = False
+                
                 self.check_if_rook_king_moved(start_row,start_col)
-                if self.current_color == Piece.black:
-                    self.black_positions.remove((start_row,start_col))
-                    self.black_positions.append((target_row,target_col))
-                    if (target_row,target_col) in self.white_positions:
-                        self.white_positions.remove((target_row,target_col)) 
-                        was_removed = True
-                else:
-                    self.white_positions.remove((start_row,start_col))
-                    self.white_positions.append((target_row,target_col))
-                    if (target_row,target_col) in self.black_positions:
-                        self.black_positions.remove((target_row,target_col))
-                        was_removed = True
-
                 self.change_current_color()
                 score = self.minmax(depth-1, False,alpha,beta)
                 self.change_current_color()
                 
                 self.resetting_back_changed_castling_flags(recent_changed_castle_flags)
-                if self.current_color == Piece.black:
-                    self.black_positions.remove((target_row,target_col))
-                    self.black_positions.append((start_row,start_col))
-                    if was_removed:
-                        self.white_positions.append((target_row,target_col))          
-                else:
-                    self.white_positions.remove((target_row,target_col))
-                    self.white_positions.append((start_row,start_col))
-                    if was_removed:
-                        self.black_positions.append((target_row,target_col))
-                
+               
                 self.board[start_row][start_col] = piece
                 self.board[target_row][target_col] = target_piece
 
@@ -1113,7 +1057,6 @@ class GameState:
 
             best_score = float("inf")
             for move in final_allowed_moves:
-                was_removed = False
                 target_row, target_col = move.target_square
                 start_row, start_col = move.start_square
                 piece  = self.board[start_row][start_col]
@@ -1121,46 +1064,15 @@ class GameState:
                 self.board[start_row][start_col] = 0
                 self.board[target_row][target_col] = piece
 
-                # if self.check_if_pawn_can_change(target_row,target_col): 
-                #     self.change_pawn_queen_and_append_back_move(target_row,target_col,final_allowed_moves,move)
-                #     pawn_to_queen = True
-                #     pawn_to_knight = False
-                # elif pawn_to_queen and self.check_if_pawn_can_change(target_row,target_col):
-                #     self.change_pawn_knight(target_row, target_col)
-                #     pawn_to_knight = True
-                #     pawn_to_queen = False
+
                 self.check_if_rook_king_moved(start_row,start_col)
                 # reverse these changes to the positions
-                if self.current_color == Piece.black:
-                    self.black_positions.remove((start_row,start_col))
-                    self.black_positions.append((target_row,target_col))
-                    if (target_row,target_col) in self.white_positions:
-                        self.white_positions.remove((target_row,target_col))
-                        was_removed = True 
-                else:                   
-                    self.white_positions.remove((start_row,start_col))
-                    self.white_positions.append((target_row,target_col))
-                    if (target_row,target_col) in self.black_positions:
-                        self.black_positions.remove((target_row,target_col))
-                        was_removed = True
-
-
                 self.change_current_color()
                 score = self.minmax(depth-1,True,alpha,beta)
                 self.change_current_color() 
 
                 self.resetting_back_changed_castling_flags(recent_changed_castle_flags)
-                if self.current_color == Piece.black:
-                    self.black_positions.remove((target_row,target_col))
-                    self.black_positions.append((start_row,start_col))
-                    if was_removed:
-                        self.white_positions.append((target_row,target_col)) 
-                    
-                else:
-                    self.white_positions.remove((target_row,target_col))
-                    self.white_positions.append((start_row,start_col))
-                    if was_removed:
-                        self.black_positions.append((target_row,target_col))
+            
                 self.board[start_row][start_col] = piece
                 self.board[target_row][target_col] = target_piece
     
@@ -1173,7 +1085,7 @@ class GameState:
                 beta = min(beta, best_score)
                 if beta <= alpha:
                     break 
-
+        self.hash_dict[hash] = best_score            
         return best_score
 
 
@@ -1182,77 +1094,75 @@ class GameState:
 
         points = 0
         if self.current_color == Piece.white:
-            for white in self.white_positions:
-                row,col = white
-                if Piece.is_type(self.board[row][col], Piece.pawn):
-                    points += self.Pawn
-                if Piece.is_type(self.board[row][col], Piece.knight):
-                    points += self.Knight
-                if Piece.is_type(self.board[row][col], Piece.bishop):
-                    points += self.Bishop
+            for row in range(8):
+                for col in range(8):
+                    if Piece.is_color(self.board[row][col],Piece.white):
+                        if Piece.is_type(self.board[row][col], Piece.pawn):
+                            points += self.Pawn
+                        if Piece.is_type(self.board[row][col], Piece.knight):
+                            points += self.Knight
+                        if Piece.is_type(self.board[row][col], Piece.bishop):
+                            points += self.Bishop
 
-                if Piece.is_type(self.board[row][col], Piece.queen):
-                    points += self.Queen
+                        if Piece.is_type(self.board[row][col], Piece.queen):
+                            points += self.Queen
 
-                if Piece.is_type(self.board[row][col], Piece.rook):
-                    points += self.Rook
+                        if Piece.is_type(self.board[row][col], Piece.rook):
+                            points += self.Rook
 
-            for black in self.black_positions:
-                row,col = black
-                if Piece.is_type(self.board[row][col], Piece.pawn):
-                    points -= self.Pawn
-                if Piece.is_type(self.board[row][col], Piece.knight):
-                    points -= self.Knight
-                if Piece.is_type(self.board[row][col], Piece.bishop):
-                    points -= self.Bishop
+            for row in range(8):
+                for col in range(8):
+                    if Piece.is_color(self.board[row][col],Piece.black):
+                        if Piece.is_type(self.board[row][col], Piece.pawn):
+                            points -= self.Pawn
+                        if Piece.is_type(self.board[row][col], Piece.knight):
+                            points -= self.Knight
+                        if Piece.is_type(self.board[row][col], Piece.bishop):
+                            points -= self.Bishop
 
-                if Piece.is_type(self.board[row][col], Piece.queen):
-                    points -= self.Queen
+                        if Piece.is_type(self.board[row][col], Piece.queen):
+                            points -= self.Queen
 
-                if Piece.is_type(self.board[row][col], Piece.rook):
-                    points -= self.Rook
+                        if Piece.is_type(self.board[row][col], Piece.rook):
+                            points -= self.Rook
 
         else:
-            for white in self.black_positions:
-                row,col = white
-                if Piece.is_type(self.board[row][col], Piece.pawn):
-                    points += self.Pawn
-                if Piece.is_type(self.board[row][col], Piece.knight):
-                    points += self.Knight
-                if Piece.is_type(self.board[row][col], Piece.bishop):
-                    points += self.Bishop
+            for row in range(8):
+                for col in range(8):
+                    if Piece.is_color(self.board[row][col],Piece.white):
+                        if Piece.is_type(self.board[row][col], Piece.pawn):
+                            points += self.Pawn
+                        if Piece.is_type(self.board[row][col], Piece.knight):
+                            points += self.Knight
+                        if Piece.is_type(self.board[row][col], Piece.bishop):
+                            points += self.Bishop
 
-                if Piece.is_type(self.board[row][col], Piece.queen):
-                    points += self.Queen
+                        if Piece.is_type(self.board[row][col], Piece.queen):
+                            points += self.Queen
 
-                if Piece.is_type(self.board[row][col], Piece.rook):
-                    points += self.Rook
+                        if Piece.is_type(self.board[row][col], Piece.rook):
+                            points += self.Rook
 
-            for black in self.white_positions:
-                row,col = black
-                if Piece.is_type(self.board[row][col], Piece.pawn):
-                    points -= self.Pawn
-                if Piece.is_type(self.board[row][col], Piece.knight):
-                    points -= self.Knight
-                if Piece.is_type(self.board[row][col], Piece.bishop):
-                    points -= self.Bishop
+            for row in range(8):
+                for col in range(8):
+                    if Piece.is_color(self.board[row][col],Piece.white):
+                        if Piece.is_type(self.board[row][col], Piece.pawn):
+                            points -= self.Pawn
+                        if Piece.is_type(self.board[row][col], Piece.knight):
+                            points -= self.Knight
+                        if Piece.is_type(self.board[row][col], Piece.bishop):
+                            points -= self.Bishop
 
-                if Piece.is_type(self.board[row][col], Piece.queen):
-                    points -= self.Queen
+                        if Piece.is_type(self.board[row][col], Piece.queen):
+                            points -= self.Queen
 
-                if Piece.is_type(self.board[row][col], Piece.rook):
-                    points -= self.Rook
+                        if Piece.is_type(self.board[row][col], Piece.rook):
+                            points -= self.Rook
 
         return points
 
     
 
-    def enhanced_evaluate(self):
-        """Replace your existing evaluate method with this"""
-        if not hasattr(self, 'evaluator'):
-            self.evaluator = EnhancedEvaluation()
-        return self.evaluator.evaluate(self)
-        
 
     def make_move(self,move,final_allowed_moves):
         was_removed = False
@@ -1261,7 +1171,6 @@ class GameState:
         pawn_to_queen = False
         pawn_to_knight = False
         piece  = self.board[start_row][start_col]
-        print("meoe",piece)
         target_piece = self.board[target_row][target_col]
         self.board[start_row][start_col] = 0
         self.board[target_row][target_col] = piece
@@ -1311,14 +1220,11 @@ class GameState:
 
 
     def check_for_captures(self, alpha, beta):
-        print(self.white_positions,"whiter")
-        score = self.enhanced_evaluate()
-        print(self.white_positions,"whitesdsdr")
+        score = self.evaluate()
         if score >= beta:
             return beta
         alpha = max(alpha, score)
         self.start_new_round()
-        print(self.white_positions,"df12")
         capture_moves = {}
         for start_square, moves in self.total_moves.items():
             capture_moves[start_square] = []
@@ -1328,10 +1234,7 @@ class GameState:
                 if self.board[target_row][target_col] != 0:
                     capture_moves[start_square].append(move)
         self.total_moves = {k: v for k, v in capture_moves.items() if v}
-        print(self.white_positions,"df143")
         self.filter_illegal_moves()
-        print(self.final_allowed_moves,"yeye")
-        print(self.white_positions,"df")
         if self.final_allowed_moves==[]:
             return score
         final_allowed_moves = copy.copy(self.final_allowed_moves)
@@ -1357,44 +1260,172 @@ class GameState:
         #             break 
         
 
-    def score_move(self):
-        for move in self.final_allowed_moves:
-            move_score = 0
-            s_row,s_col = move.start_square
-            t_row,t_col = move.target_square
-            piece = self.board[s_row][s_col]
-            target_piece = self.board[t_row][t_col]
-            #check if the target piece is valuable and current piece is dispensable
-            move_score += target_piece*4 - piece*4
+    def score_move(self, move):
+        capturedPieceValueMultiplier = 10
+        squareControlledByOpponentPawnPenalty = 350
+        move_score = 0
+        s_row,s_col = move.start_square
+        t_row,t_col = move.target_square
+        move_piece = self.board[s_row][s_col]
+        target_piece = self.board[t_row][t_col]
 
-            #check if it results in pawn promotion
-            if t_row==7 or t_row == 0 and Piece.is_type(piece,Piece.pawn):
-                move_score += 10
+        if target_piece!=0:
+            move_score = capturedPieceValueMultiplier * GetPieceValue (target_piece) - GetPieceValue (move_piece)
 
-            #penalize for moving to an attacked sqaure
-            if move.target_square in self.attack_squares or move.target_square in self.attacker_defended_squares:
-                #grade by the value of the piece
-                move_score -= (7 - (target_piece - piece))
+
+        #check if it results in pawn promotion
+        if t_row==7 or t_row == 0 and Piece.is_type(move_piece,Piece.pawn):
+            move_score += enhancedEvaluation.QUEEN_VALUE
+
+        #penalize for moving to an attacked sqaure
+        if move.target_square in self.attack_squares or move.target_square in self.attacker_defended_squares:
+            #grade by the value of the piece
+            move_score -= squareControlledByOpponentPawnPenalty 
             
-            #try to move the 
-            if Piece.is_type(self.baord[s_row][s_col], Piece.king):
-                move_score -= 10
         return move_score
 
     def order_moves(self):
         scored_moves= []
         for move in self.final_allowed_moves:
-            score  = self.score_move()
+            score  = self.score_move(move)
             scored_moves.append((score, move))
         scored_moves.sort(key=lambda x:x[0],reverse=True)
         self.final_allowed_moves = [move for  _,move in scored_moves]
 
 
+    def generate_random_number(self, seed = 1440):
+        seed ^= seed << 13
+        seed ^= seed >> 17
+        seed ^= seed << 5
+        return seed
+
+    def generate_piece_keys(self):
+        for piece in range(12):
+            for square in range(64):
+                self.piece_keys[piece][square] = self.generate_random_number(seed = 1300 * (piece+1) * (square+1))
+
+    def generate_castling_keys(self):
+        self.castling_keys =  [0 for _ in range(4)]
+        for i in range(len(self.castling_keys)):
+            self.castling_keys[i] = self.generate_random_number(seed =1200 * i)
+
+    def generate_side_key(self):
+        self.black_side_key = self.generate_random_number(seed = 13001)
+
+    def compute_hash_key(self):
+        hash = 0
+        for row in range(8):
+            for col in range(8):
+                if Piece.is_type(self.board[row][col],Piece.bishop) and Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[0][row*8 + col] 
+                if Piece.is_type(self.board[row][col],Piece.queen) and Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[1][row*8 + col] 
+                if Piece.is_type(self.board[row][col],Piece.king) and Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[2][row*8 + col] 
+                if Piece.is_type(self.board[row][col],Piece.knight) and Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[3][row*8 + col] 
+                if Piece.is_type(self.board[row][col],Piece.rook) and Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[4][row*8 + col] 
+                if Piece.is_type(self.board[row][col],Piece.pawn) and Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[5][row*8 + col] 
+
+                if Piece.is_type(self.board[row][col],Piece.bishop) and not Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[6][row*8 + col] 
+                if Piece.is_type(self.board[row][col],Piece.queen) and not Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[7][row*8 + col] 
+                if Piece.is_type(self.board[row][col],Piece.king) and not Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[8][row*8 + col] 
+                if Piece.is_type(self.board[row][col],Piece.knight) and not Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[9][row*8 + col] 
+                if Piece.is_type(self.board[row][col],Piece.rook) and not Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[10][row*8 + col] 
+                if Piece.is_type(self.board[row][col],Piece.pawn) and not Piece.is_color(self.board[row][col], Piece.white):
+                    hash ^= self.piece_keys[11][row*8 + col] 
+
+        if not self.castle_flags['BrookRMove'] and not self.castle_flags['BkingMove']:
+            hash ^= self.castling_keys[0]
+
+        if not self.castle_flags['BrookLMove'] and not self.castle_flags['BkingMove']:
+            hash ^= self.castling_keys[1]
+
+        if not self.castle_flags['WrookLMove'] and not self.castle_flags['WkingMove']:
+            hash ^= self.castling_keys[2]
+
+        if not self.castle_flags['WrookRMove'] and not self.castle_flags['WkingMove']:
+            hash ^= self.castling_keys[3]
+        
+        if self.current_color == Piece.black:
+            hash ^=  self.black_side_key
+
+        return hash
+    
+
+def GetPieceValue (pieceType):
+    match (pieceType):
+        case Piece.queen:
+            return enhancedEvaluation.QUEEN_VALUE
+        case Piece.rook:
+            return enhancedEvaluation.ROOK_VALUE
+        case Piece.knight:
+            return enhancedEvaluation.KNIGHT_VALUE
+        case Piece.bishop:
+            return enhancedEvaluation.BISHOP_VALUE
+        case Piece.pawn:
+            return enhancedEvaluation.PAWN_VALUE
+        case _:
+            return 0
+    
 
 
-                
 
-            
-            
-            
-            
+class MCTS:
+    def __init__(self, cnn, simulations):
+        self.cnn = cnn
+        self.simualtions = simulations
+
+    def search(self, board):
+        score = 0
+        for _ in range(self.simulations):
+            node = self.select_node(board)
+            score = self.simulate(node)
+            self.backprop(score)
+
+        return self.get_best_move()
+    
+    def select_node(self, board):
+        parent_hash =  self.compute_hash_key(self.board)
+        self.start_new_round()
+        for move in self.final_allowed_moves:
+            start_row, start_col = move.start_square
+            target_row, target_col = move.target_square
+
+            self.board[target_row][target_col] = self.board[start_row][start_col]
+            self.board[start_row][start_col] = 0
+            # implement check for castle move being made, make caslte move be made instead if that is the case
+
+            hash = self.compute_hash_key(self.board)
+            self.hash_dict[hash] += 1
+
+            self.board[start_row][start_col] = self.board[target_row][target_col]
+            self.board[target_row][target_col] = 0
+            # implement check to unmake any castle moves
+
+            UCB = self.avergae_value_hash_dict[hash] + math.sqrt(2) + math.sqrt(math.log(self.hash_dict[parent_hash])/self.hash_dict[hash])
+
+            UCB_hash_dict[hash]  = hash
+             
+        #use UCB
+        #UCB = vi(avergae reward from this node)+ sqrt(2)*sqrt(ln Np (number of times the parent node was viisted)/Ni (number of the times the child node has been visited))
+        pass
+
+    def simulate(self, node):
+        #eval with CNNs
+        score = self.cnn.predict(node)
+        return score
+
+    def backprop(self):
+
+        pass
+
+    def get_best_move(self):
+        pass
